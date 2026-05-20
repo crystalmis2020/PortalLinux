@@ -1,0 +1,115 @@
+.content-header h1 {
+    font-weight: 800;
+    letter-spacing: 0;
+    color: var(--csci-brand-900);
+    font-size: 1.75rem;
+}
+
+.content-header .text-muted {
+    font-size: 0.95rem;
+    color: var(--csci-brand-500) !important;
+}
+
+.content-wrapper,
+.page-content {
+    background: linear-gradient(180deg, #ffffff 0%, var(--csci-surface-alt) 100%);
+}
+
+html.dark-theme .content-wrapper,
+html.dark-theme .page-content {
+    background: radial-gradient(circle at 14% 8%, rgba(16, 163, 127, 0.08) 0, rgba(16, 163, 127, 0) 28%),
+                linear-gradient(180deg, #1b1b1b 0%, #232323 100%) !important;
+}
+
+.info-box {
+    border-radius: 8px;
+    box-shadow: 0 8px 18px rgba(0, 73, 30, 0.07);
+    border: 1px solid rgba(0, 73, 30, 0.1);
+    background-color: #fff;
+    overflow: hidden;
+}
+
+.info-box .info-box-number {
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: var(--csci-brand-900);
+}
+
+.card {
+    border-radius: 8px;
+    box-shadow: 0 8px 20px rgba(0, 73, 30, 0.07);
+    border: 1px solid rgba(0, 73, 30, 0.1);
+}
+
+.card .card-header {
+    border-bottom: 1px solid rgba(0, 73, 30, 0.08);
+    background-color: rgba(145, 159, 2, 0.1);
+}
+
+.card-title {
+    color: var(--csci-brand-900);
+}
+
+.table thead th {
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0;
+    color: var(--csci-brand-900);
+    white-space: nowrap;
+    background-color: #d7e4d6;
+}
+
+.table tbody tr {
+    background-color: rgba(221, 231, 221, 0.84);
+}
+
+.table tbody tr:hover {
+    background-color: rgba(191, 208, 191, 0.92);
+}
+
+.btn-sm {
+    border-radius: 8px;
+    min-height: 32px;
+}
+
+.row .col-md-3 .info-box,
+.row .col-lg-3 .info-box {
+    animation: csci-fade-up 0.38s ease both;
+}
+
+.row .col-md-3:nth-child(2) .info-box,
+.row .col-lg-3:nth-child(2) .info-box {
+    animation-delay: 0.05s;
+}
+
+.row .col-md-3:nth-child(3) .info-box,
+.row .col-lg-3:nth-child(3) .info-box {
+    animation-delay: 0.1s;
+}
+
+.row .col-md-3:nth-child(4) .info-box,
+.row .col-lg-3:nth-child(4) .info-box {
+    animation-delay: 0.15s;
+}
+
+@keyframes csci-fade-up {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (max-width: 768px) {
+    .content-header h1 {
+        font-size: 1.35rem;
+    }
+
+    .table-responsive {
+        border-radius: 8px;
+    }
+}

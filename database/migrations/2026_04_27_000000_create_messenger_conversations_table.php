@@ -1,0 +1,36 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        if (Schema::hasTable('messenger_conversations')) {
+            return;
+        }
+
+        Schema::create('messenger_conversations', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('user_one_id')->constrained('users')->cascadeOnDelete();
+            $table->foreignId('user_two_id')->constrained('users')->cascadeOnDelete();
+            $table->timestamp('last_message_at')->nullable()->index();
+            $table->timestamps();
+
+            $table->unique(['user_one_id', 'user_two_id'], 'messenger_conversations_unique_pair');
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('messenger_conversations');
+    }
+};

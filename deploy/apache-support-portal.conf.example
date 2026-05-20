@@ -1,0 +1,29 @@
+<VirtualHost *:80>
+    ServerName 128.0.254.20
+
+    ProxyPreserveHost On
+    ProxyRequests Off
+
+    # Serve Laravel from the /support subpath.
+    RedirectMatch 302 ^/support/?$ /support/index.php
+    Alias /support /mnt/hgfs/Portal/MIS-Portal-main/support-portal-web1/public
+    Alias /support/ /mnt/hgfs/Portal/MIS-Portal-main/support-portal-web1/public/
+
+    <Directory /mnt/hgfs/Portal/MIS-Portal-main/support-portal-web1/public>
+        AllowOverride All
+        Require all granted
+        DirectoryIndex index.php
+        Options FollowSymLinks
+    </Directory>
+
+    # Prevent both /support and /support/ from falling through to the proxy.
+    ProxyPass /support !
+    ProxyPass /support/ !
+
+    # Example: keep another app available at the site root.
+    # ProxyPass / http://127.0.0.1:81/
+    # ProxyPassReverse / http://127.0.0.1:81/
+
+    ErrorLog ${APACHE_LOG_DIR}/support-portal-error.log
+    CustomLog ${APACHE_LOG_DIR}/support-portal-access.log combined
+</VirtualHost>

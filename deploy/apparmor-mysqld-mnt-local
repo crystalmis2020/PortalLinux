@@ -1,0 +1,3 @@
+# Allow MySQL to access the mounted loopback datadir.
+/mnt/mysql-data/ r,
+/mnt/mysql-data/** rwk,

@@ -1,0 +1,25 @@
+<VirtualHost *:80>
+    ServerName 128.0.254.20
+    ServerAdmin webmaster@localhost
+
+    ProxyPreserveHost On
+    ProxyRequests Off
+
+    # Serve the Laravel app from /support.
+    Alias /support /mnt/hgfs/Portal/MIS-Portal-main/support-portal-web1/public
+
+    <Directory /mnt/hgfs/Portal/MIS-Portal-main/support-portal-web1/public>
+        AllowOverride All
+        Require all granted
+        DirectoryIndex index.php
+        Options FollowSymLinks
+    </Directory>
+
+    # Keep Nextcloud available at the site root after moving its HTTP port to 81.
+    ProxyPass /support !
+    ProxyPass / http://127.0.0.1:81/
+    ProxyPassReverse / http://127.0.0.1:81/
+
+    ErrorLog ${APACHE_LOG_DIR}/support-portal-error.log
+    CustomLog ${APACHE_LOG_DIR}/support-portal-access.log combined
+</VirtualHost>

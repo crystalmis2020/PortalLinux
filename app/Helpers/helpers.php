@@ -1,0 +1,166 @@
+<?php
+
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Schema;
+
+if (!function_exists('getReportStatusClass')) {
+    /**
+     * Get the Bootstrap class for report status.
+     *
+     * @param string $status
+     * @return string
+     */
+    function getReportStatusClass($status){
+        return match (strtolower($status)) {
+            'new' => 'bg-primary',
+            'in progress' => 'bg-warning',
+            'resolved' => 'bg-success',
+            'assigned' => 'bg-info',
+            'closed' => 'bg-secondary',
+            default => 'bg-light',
+        };
+    }
+}
+
+if (!function_exists('getUserNotifications')) {
+    /**
+     * Retrieve the latest notifications for the authenticated user.
+     *
+     * This function fetches notifications where:
+     * - The user is the direct recipient (`to_user_id`).
+     * - The notification is assigned to the user's section (`section_to`).
+     * - The results are sorted by the latest notifications.
+     *
+     * @param int $limit The number of notifications to retrieve. Default is 8.
+     * @return \Illuminate\Database\Eloquent\Collection A collection of Notification models.
+     */
+    function getUserNotifications($limit = 8): \Illuminate\Database\Eloquent\Collection {
+        $user = Auth::user();
+        if (!$user) {
+            return collect(); // Return an empty collection if no authenticated user
+        }
+
+        // Avoid breaking layout rendering if migrations are out of sync.
+        if (!Schema::hasTable('notifications')) {
+            return collect();
+        }
+
+        return \App\Models\Notification::where('to_user_id', $user->id)->where('is_read', 'No')
+        ->latest()
+        //->take($limit)
+        ->get();
+    }
+}
+
+if (!function_exists('portalMessengerEnabled')) {
+    function portalMessengerEnabled(): bool
+    {
+        return Schema::hasTable('messenger_conversations') && Schema::hasTable('messenger_messages');
+    }
+}
+
+if (!function_exists('getPortalMessengerUnreadCount')) {
+    function getPortalMessengerUnreadCount(): int
+    {
+        $user = Auth::user();
+
+        if (!$user || !portalMessengerEnabled()) {
+            return 0;
+        }
+
+        return \App\Models\MessengerMessage::where('recipient_id', $user->id)
+            ->whereNull('read_at')
+            ->count();
+    }
+}
+
+if (!function_exists('getAssignedUserNames')) {
+    function getAssignedUserNames($assignedUsersJson)
+    {
+        if (empty($assignedUsersJson)) {
+            return 'Not Yet Assigned';
+        }
+
+        // Decode assigned_users field (JSON to array)
+        $assignedUserIds = is_array($assignedUsersJson) ? $assignedUsersJson : json_decode($assignedUsersJson, true);
+
+        // Fetch user full names from User model
+        $assignedUsers = \App\Models\User::whereIn('id', $assignedUserIds)->pluck('full_name')->toArray();
+
+        return implode('<br />', $assignedUsers);
+    }
+}
+
+if (!function_exists('sendIpMsgNotification')) {
+    /**
+     * Send an IP Messenger notification to a specified IP with a given message.
+     *
+     * @param string $message The message to be sent.
+     * @param string|null $ip The IP address of the recipient.
+     * @return void
+     */
+    function sendIpMsgNotification(string $message, ?string $ip): void
+    {
+        if ($ip === null || empty(trim($ip))) {
+            return;
+        }
+
+        // if(env('APP_ENV') == 'local'){
+        //     $ip = '128.0.100.14';
+        //     $message .= '[ TEST TEST ]';
+        // }
+
+        // $message .= ' [THIS IS JUST TEST] ';
+        $safeMessage = trim(str_replace(["\r", "\n"], ' ', $message));
+        $safeIp = trim($ip);
+
+        if (!filter_var($safeIp, FILTER_VALIDATE_IP)) {
+            \Illuminate\Support\Facades\Log::warning('IPMSG notification skipped: invalid recipient IP', [
+                'ip' => $safeIp,
+            ]);
+            return;
+        }
+
+        $senderName = preg_replace('/[:\r\n]/', ' ', (string) config('app.name', 'Support Portal'));
+        $senderHost = preg_replace('/[:\r\n]/', ' ', gethostname() ?: 'support-portal');
+        $packetNo = (string) (time() . random_int(1000, 9999));
+        $sendMessageCommand = 0x20;
+        $packet = '1:' . $packetNo . ':' . $senderName . ':' . $senderHost . ':' . $sendMessageCommand . ':' . $safeMessage . "\0";
+        $targetIp = filter_var($safeIp, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) ? '[' . $safeIp . ']' : $safeIp;
+        $socket = @stream_socket_client('udp://' . $targetIp . ':2425', $errno, $errstr, 1, STREAM_CLIENT_CONNECT);
+
+        if ($socket === false) {
+            \Illuminate\Support\Facades\Log::warning('IPMSG notification failed: unable to open UDP socket', [
+                'ip' => $safeIp,
+                'port' => 2425,
+                'error_code' => $errno,
+                'error' => $errstr,
+            ]);
+            return;
+        }
+
+        $bytesWritten = @fwrite($socket, $packet);
+        @fclose($socket);
+
+        if ($bytesWritten === false || $bytesWritten < strlen($packet)) {
+            \Illuminate\Support\Facades\Log::warning('IPMSG notification failed: UDP packet was not fully sent', [
+                'ip' => $safeIp,
+                'port' => 2425,
+                'bytes_written' => $bytesWritten,
+                'packet_length' => strlen($packet),
+            ]);
+        }
+    }
+}
+
+if (!function_exists('attachmentValidationRule')) {
+    /**
+     * Returns the validation rule for file attachments.
+     *
+     * @return string
+     */
+    function attachmentValidationRule(): string
+    {
+        return 'nullable|file|mimes:jpg,jpeg,png,pdf,doc,docx,xls,xlsx,txt|max:20480'; // Max 20MB
+    }
+}

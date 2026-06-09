@@ -49,13 +49,6 @@
                 <div class="menu-title">Messhall</div>
             </a>
         </li>
-        <li>
-            <a href="{{ route('trip-ticket') }}">
-                <div class="parent-icon"><i class='bx bx-calendar-week'></i>
-                </div>
-                <div class="menu-title">Trip Ticket</div>
-            </a>
-        </li>
         @endif
         @if (Auth::user()->isMisMember())
         <li>

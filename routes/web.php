@@ -16,6 +16,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\InventoryItemController;
 use App\Http\Controllers\MessengerController;
 use App\Http\Controllers\InternetAccessRequestController;
+use App\Http\Controllers\TripTicketController;
 
 
 use App\Http\Controllers\ReportsBackTransferController;
@@ -61,7 +62,6 @@ Route::middleware(['auth'])->prefix('internet-access')->name('internet-access.')
 Route::middleware(['auth'])->prefix('notifications')->name('notifications.')->controller(NotificationController::class)->group(function () {
     Route::post('/bulk-update', 'bulkUpdate')->name('bulk-update');
 });
-
 
 
 // Administrative Routes
@@ -110,6 +110,16 @@ Route::middleware(['auth'])->group(function () {
     // (Store/Update/Delete routes to be added later)
 });
 
+// Trip Tickets
+Route::middleware(['auth'])->prefix('trip-tickets')->name('trip-tickets.')->controller(TripTicketController::class)->group(function () {
+    Route::get('/', 'index')->name('index');
+    Route::get('/create', 'create')->name('create');
+    Route::post('/', 'store')->name('store');
+    Route::post('/{tripTicket}/encode', 'encode')->name('encode');
+    Route::get('/{tripTicket}/print', 'print')->name('print');
+    Route::get('/{tripTicket}', 'show')->name('show');
+});
+
 // MIS Item Inventory
 Route::middleware(['auth'])->prefix('inventory-items')->name('inventory-items.')->controller(InventoryItemController::class)->group(function () {
     Route::get('/', 'index')->name('index');
@@ -117,6 +127,8 @@ Route::middleware(['auth'])->prefix('inventory-items')->name('inventory-items.')
     Route::put('/{inventoryItem}', 'update')->name('update');
     Route::delete('/{inventoryItem}', 'destroy')->name('destroy');
     Route::post('/{inventoryItem}/release', 'release')->name('release');
+    Route::put('/releases/{inventoryItemRelease}', 'updateRelease')->name('releases.update');
+    Route::delete('/releases/{inventoryItemRelease}', 'destroyRelease')->name('releases.destroy');
     Route::get('/{inventoryItem}', 'show')->name('show');
     Route::get('/{inventoryItem}/history', 'history')->name('history');
     Route::post('/{inventoryItem}/parts', 'storePart')->name('parts.store');
@@ -153,7 +165,7 @@ Route::middleware(['auth'])->group(function () {
 Route::middleware(['auth'])->group(function () {
     Route::view('/user', 'page-underconstruction')->name('user');
     Route::view('/messhall', 'page-underconstruction')->name('messhall');
-    Route::view('/trip-ticket', 'page-underconstruction')->name('trip-ticket');
+    Route::redirect('/trip-ticket', '/trip-tickets')->name('trip-ticket');
 });
 
 

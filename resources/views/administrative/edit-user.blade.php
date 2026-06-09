@@ -184,6 +184,25 @@
                             <option value="Admin" {{ strtolower($user->user_type ?? '') == 'admin' ? 'selected' : '' }}>Admin</option>
                         </select>
                     </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Trip Ticket Access</label>
+                        <div class="border rounded p-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="1" id="can_encode_trip_tickets" name="can_encode_trip_tickets" {{ $user->can_encode_trip_tickets ? 'checked' : '' }}>
+                                <label class="form-check-label" for="can_encode_trip_tickets">Encoder</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="1" id="can_approve_trip_tickets" name="can_approve_trip_tickets" {{ $user->can_approve_trip_tickets ? 'checked' : '' }}>
+                                <label class="form-check-label" for="can_approve_trip_tickets">Approver</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="1" id="can_manage_trip_tickets" name="can_manage_trip_tickets" {{ $user->can_manage_trip_tickets ? 'checked' : '' }}>
+                                <label class="form-check-label" for="can_manage_trip_tickets">Manager</label>
+                            </div>
+                            <small class="text-muted d-block mt-2">All users can request trip tickets. These options add encoder, approver, or manager access.</small>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <a href="javascript;" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</a>

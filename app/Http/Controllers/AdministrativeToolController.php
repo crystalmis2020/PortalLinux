@@ -66,6 +66,9 @@ class AdministrativeToolController extends Controller
             'department_id' => 'required|exists:departments,id',
             'section_id' => 'required|exists:sections,id',
             'user_type' => 'required|in:User,Admin,user,admin',
+            'can_encode_trip_tickets' => 'nullable|boolean',
+            'can_approve_trip_tickets' => 'nullable|boolean',
+            'can_manage_trip_tickets' => 'nullable|boolean',
         ]);
 
         //dd(hash('sha256', $request->password));
@@ -79,6 +82,9 @@ class AdministrativeToolController extends Controller
             'section_id' => $request->section_id,
             'ip_address' => $request->ip_address,
             'user_type' => strtolower($request->user_type),
+            'can_encode_trip_tickets' => $request->boolean('can_encode_trip_tickets'),
+            'can_approve_trip_tickets' => $request->boolean('can_approve_trip_tickets'),
+            'can_manage_trip_tickets' => $request->boolean('can_manage_trip_tickets'),
         ]);
 
         return response()->json([
@@ -88,6 +94,8 @@ class AdministrativeToolController extends Controller
                 'full_name' => $user->full_name,
                 'department' => $user->department->name ?? 'N/A',
                 'section' => $user->section->name ?? 'N/A',
+                'status' => $user->is_active ? 'Active' : 'Inactive',
+                'trip_ticket_access' => $this->tripTicketAccessSummary($user),
             ]
         ]);
     }
@@ -130,6 +138,9 @@ class AdministrativeToolController extends Controller
                 'section_id' => 'required|exists:sections,id',
                 'ip_address' => 'required|ip',
                 'user_type' => 'required|in:User,Admin,user,admin',
+                'can_encode_trip_tickets' => 'nullable|boolean',
+                'can_approve_trip_tickets' => 'nullable|boolean',
+                'can_manage_trip_tickets' => 'nullable|boolean',
             ]);
 
             $user->update([
@@ -139,6 +150,9 @@ class AdministrativeToolController extends Controller
                 'section_id' => $request->section_id,
                 'ip_address' => $request->ip_address,
                 'user_type' => strtolower($request->user_type),
+                'can_encode_trip_tickets' => $request->boolean('can_encode_trip_tickets'),
+                'can_approve_trip_tickets' => $request->boolean('can_approve_trip_tickets'),
+                'can_manage_trip_tickets' => $request->boolean('can_manage_trip_tickets'),
             ]);
 
             return response()->json(['success' => 'User updated successfully', 'user' => $user]);
@@ -261,6 +275,20 @@ class AdministrativeToolController extends Controller
     protected function isLaravelPasswordHash(string $storedHash): bool
     {
         return preg_match('/^\$(2y|2a|2b|argon2i|argon2id)\$/', $storedHash) === 1;
+    }
+
+    protected function tripTicketAccessSummary(User $user): string
+    {
+        if ($user->canManageTripTickets()) {
+            return 'Manager';
+        }
+
+        $access = array_filter([
+            $user->can_encode_trip_tickets ? 'Encoder' : null,
+            $user->can_approve_trip_tickets ? 'Approver' : null,
+        ]);
+
+        return empty($access) ? 'Requester' : implode(', ', $access);
     }
 
     public function destroyUser($id)

@@ -250,6 +250,7 @@ $(function () {
                 $('#inventoryReleasesTableWrapper').html(html);
                 reinitializeTable('inventoryReleasesTable', [[0, 'desc']]);
                 updateInventorySummaryFromTable();
+                initializeTooltips();
             })
             .fail(function () {
                 notify('error', 'Unable to refresh release records.');
@@ -344,6 +345,14 @@ $(function () {
         clearValidation($form);
     }
 
+    function resetEditReleaseRecordModal() {
+        const $form = $('#editReleaseRecordForm');
+        $form[0].reset();
+        $('#editReleaseRecordItemNote').empty();
+        syncSectionOptions($('#edit_release_department'));
+        clearValidation($form);
+    }
+
     function resetInventoryPartModal() {
         const $form = $('#inventoryPartForm');
         $form[0].reset();
@@ -408,6 +417,29 @@ $(function () {
         new bootstrap.Modal(document.getElementById('releaseInventoryItemModal')).show();
     });
 
+    $(document).on('click', '.view-inventory-item-history', function () {
+        const item = $(this).data('item');
+        const stockQuantity = Number(item.stock_quantity || 0);
+        const releasedQuantity = Number(item.released_quantity || 0);
+        const originalQuantity = stockQuantity + releasedQuantity;
+        const valueOrDash = function (value) {
+            return value || '—';
+        };
+
+        $('#history_item_code').text(valueOrDash(item.item_code));
+        $('#history_item_name').text(valueOrDash(item.item_name));
+        $('#history_original_quantity').text(originalQuantity);
+        $('#history_stock_quantity').text(stockQuantity);
+        $('#history_released_quantity').text(releasedQuantity);
+        $('#history_assigned_to').text(valueOrDash(item.assigned_to));
+        $('#history_department').text(valueOrDash(item.department));
+        $('#history_location').text(valueOrDash(item.location));
+        $('#history_status').text(valueOrDash(item.status));
+        $('#history_remarks').text(valueOrDash(item.remarks));
+
+        new bootstrap.Modal(document.getElementById('inventoryItemHistoryModal')).show();
+    });
+
     $('#releaseInventoryItemForm').on('submit', function (event) {
         event.preventDefault();
 
@@ -426,6 +458,110 @@ $(function () {
                 refreshInventoryItemsTable();
                 refreshInventoryReleasesTable();
                 resetReleaseInventoryItemModal();
+            }
+        });
+    });
+
+    $(document).on('click', '.view-release-record', function () {
+        const release = $(this).data('release');
+        const valueOrDash = function (value) {
+            return value || '—';
+        };
+
+        $('#view_release_date').text(valueOrDash(release.date));
+        $('#view_release_item_name').text(valueOrDash(release.item_name));
+        $('#view_release_item_remarks').text(valueOrDash(release.item_remarks));
+        $('#view_release_quantity').text(valueOrDash(release.quantity));
+        $('#view_release_department').text(valueOrDash(release.department));
+        $('#view_release_location').text(valueOrDash(release.location));
+        $('#view_release_purpose').text(valueOrDash(release.purpose));
+        $('#view_release_remarks').text(valueOrDash(release.remarks));
+        $('#view_release_released_to').text(valueOrDash(release.released_to));
+        $('#view_release_released_by').text(valueOrDash(release.released_by));
+
+        new bootstrap.Modal(document.getElementById('viewReleaseRecordModal')).show();
+    });
+
+    $(document).on('click', '.edit-release-record', function () {
+        resetEditReleaseRecordModal();
+
+        const release = $(this).data('release');
+        const updateUrl = $(this).data('update-url');
+        const $form = $('#editReleaseRecordForm');
+
+        $('#editReleaseRecordItemNote').text(release.item_name + ' was released by ' + release.released_by + ' on ' + release.date + '.');
+        $('#edit_release_quantity').val(release.quantity);
+        setDepartmentAndSection('#edit_release_department', '#edit_release_location', release.department, release.location);
+        $('#edit_release_purpose').val(release.purpose);
+        $('#edit_release_remarks').val(release.remarks);
+        $form.data('update-url', updateUrl);
+
+        new bootstrap.Modal(document.getElementById('editReleaseRecordModal')).show();
+    });
+
+    $('#editReleaseRecordForm').on('submit', function (event) {
+        event.preventDefault();
+
+        const $form = $(this);
+
+        submitAjaxForm({
+            form: $form,
+            button: $('#editReleaseRecordSubmitButton'),
+            url: $form.data('update-url'),
+            method: 'PUT',
+            data: $form.serialize(),
+            loadingText: 'Saving...',
+            onSuccess: function () {
+                bootstrap.Modal.getInstance(document.getElementById('editReleaseRecordModal')).hide();
+                refreshInventoryItemsTable();
+                refreshInventoryReleasesTable();
+                resetEditReleaseRecordModal();
+            }
+        });
+    });
+
+    $(document).on('click', '.delete-release-record', function () {
+        const itemName = $(this).data('item-name') || 'this release record';
+        const quantity = $(this).data('quantity') || 0;
+        const $form = $('#deleteReleaseRecordForm');
+
+        clearValidation($form);
+        $('#delete_release_record_url').val($(this).data('delete-url'));
+        $('#delete_release_record_item_name').text(itemName + ' (' + quantity + ' item(s))');
+
+        new bootstrap.Modal(document.getElementById('deleteReleaseRecordModal')).show();
+    });
+
+    $('#deleteReleaseRecordForm').on('submit', function (event) {
+        event.preventDefault();
+
+        const $form = $(this);
+        const $button = $('#deleteReleaseRecordSubmitButton');
+        const buttonText = $button.text();
+
+        clearValidation($form);
+        $button.prop('disabled', true).text('Deleting...');
+
+        $.ajax({
+            url: $('#delete_release_record_url').val(),
+            method: 'DELETE',
+            headers: {
+                'X-CSRF-TOKEN': csrfToken
+            },
+            success: function (response) {
+                notify('success', response.success || 'Release record deleted successfully.');
+                bootstrap.Modal.getInstance(document.getElementById('deleteReleaseRecordModal')).hide();
+                refreshInventoryItemsTable();
+                refreshInventoryReleasesTable();
+                $form[0].reset();
+            },
+            error: function (xhr) {
+                const message = xhr.responseJSON?.message || 'Unable to delete release record.';
+                $('#deleteReleaseRecordFormAlert').removeClass('d-none').text(message);
+                notify('error', message);
+            },
+            complete: function () {
+                $button.prop('disabled', false).text(buttonText);
             }
         });
     });

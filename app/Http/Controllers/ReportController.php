@@ -501,9 +501,15 @@ class ReportController extends Controller
 
     public function uploadAttachment(Request $request, $reportId)
     {
-        $request->validate([
-            'attachment' => 'required|file|mimes:jpg,jpeg,png,pdf,doc,docx,xls,xlsx,txt|max:20480',
-        ]);
+        $request->validate(
+            [
+                'attachment' => attachmentValidationRule(true),
+            ],
+            [
+                'attachment.max' => 'Attachment is too large. Please choose a file up to ' . attachmentMaxUploadLabel() . '.',
+                'attachment.extensions' => 'Unsupported file type. Please upload jpg, jpeg, png, pdf, doc, docx, xls, xlsx, or txt.',
+            ]
+        );
 
         $report = Report::findOrFail($reportId);
 
@@ -513,7 +519,7 @@ class ReportController extends Controller
             $extension = strtolower($file->getClientOriginalExtension());
             $mimeType = $file->getClientMimeType() ?: $file->getMimeType();
             $sizeBytes = $file->getSize();
-            $filename = time() . '_' . $originalName;
+            $filename = uniqid('report_', true) . ($extension ? '.' . $extension : '');
             $uploadDir = public_path('uploads/reports');
 
             if (!File::exists($uploadDir)) {

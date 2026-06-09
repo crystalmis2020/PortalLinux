@@ -75,6 +75,29 @@ $(document).ready(function () {
         return `${(size / (1024 * 1024)).toFixed(1)} MB`;
     }
 
+    const allowedAttachmentExtensions = ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'];
+    const maxAttachmentBytes = 20 * 1024 * 1024;
+
+    function validateAttachmentFile(file) {
+        if (!file) {
+            return 'Please choose a file to upload.';
+        }
+
+        const extension = file.name.includes('.')
+            ? file.name.split('.').pop().toLowerCase()
+            : '';
+
+        if (!allowedAttachmentExtensions.includes(extension)) {
+            return 'Unsupported file type. Please upload jpg, jpeg, png, pdf, doc, docx, xls, xlsx, or txt.';
+        }
+
+        if (file.size > maxAttachmentBytes) {
+            return 'Attachment is too large. Please choose a file up to 20MB.';
+        }
+
+        return null;
+    }
+
     function renderAttachmentPreviewFallback(message) {
         return `
             <div class="report-attachment-preview__empty">
@@ -259,6 +282,20 @@ $(document).ready(function () {
 
     $("#uploadAttachmentForm").submit(function (e) {
         e.preventDefault();
+
+        const attachment = document.getElementById('attachment')?.files?.[0] || null;
+        const attachmentError = validateAttachmentFile(attachment);
+
+        if (attachmentError) {
+            showReportFeedback('error', attachmentError);
+            Lobibox.notify("error", {
+                size: "mini",
+                sound: false,
+                delay: 5000,
+                msg: attachmentError
+            });
+            return;
+        }
 
         let formData = new FormData(this);
         let report_id = getReportId(this); // Get the report ID

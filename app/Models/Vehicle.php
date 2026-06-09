@@ -21,10 +21,15 @@ class Vehicle extends Model
         'is_available',
     ];
 
+    protected $casts = [
+        'is_available' => 'boolean',
+    ];
+
     /**
-     * Get the sections associated with the trip_ticekt.
+     * Get the trip tickets assigned to the vehicle.
      */
-    public function tripTickets(): HasMany{
+    public function tripTickets(): HasMany
+    {
         return $this->hasMany(TripTicket::class);
     }
 }

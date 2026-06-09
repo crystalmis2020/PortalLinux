@@ -75,17 +75,26 @@ $(document).ready(function () {
     // Form Submission with Validation and Append
     $('#addUserModal form').submit(function (e) {
         e.preventDefault();
+        const form = $(this);
+        const submitButton = form.find('button[type="submit"]');
+        const originalButtonText = submitButton.text();
+
+        submitButton.prop('disabled', true).text('Adding...');
 
         $.ajax({
             url: ADMIN_SAVE_USER_URL,
             type: "POST",
-            data: $(this).serialize(),
+            data: form.serialize(),
             success: function (response) {
+                const userStatus = response.user?.status || 'Active';
+                const successMessage = `${response.success || 'User added successfully'}. Status: ${userStatus}.`;
+
+                showFormFeedback(form, 'success', successMessage);
                 Lobibox.notify('success', {
                     size: 'mini',
                     sound: false,
                     delay: 5000,
-                    msg: response.success
+                    msg: successMessage
                 });
 
                 // Append the new user to the table
@@ -106,22 +115,41 @@ $(document).ready(function () {
                         <td>${response.user.full_name}</td>
                         <td>${response.user.department}</td>
                         <td>${response.user.section}</td>
+                        <td><span class="badge bg-secondary">${response.user.trip_ticket_access || 'Requester'}</span></td>
                     </tr>
                 `);
 
                 $('#addUserModal').modal('hide'); // Close the modal
-                $('#addUserModal form')[0].reset(); // Reset the form
+                form[0].reset(); // Reset the form
+                form.find('.admin-form-feedback').remove();
             },
             error: function (xhr) {
-                let errors = xhr.responseJSON.errors;
-                $.each(errors, function (key, value) {
-                    Lobibox.notify('error', {
-                        size: 'mini',
-                        sound: false,
-                        delay: 5000,
-                        msg: value[0]
+                let response = xhr.responseJSON || {};
+
+                if (response.errors) {
+                    $.each(response.errors, function (key, value) {
+                        showFormFeedback(form, 'error', value[0]);
+                        Lobibox.notify('error', {
+                            size: 'mini',
+                            sound: false,
+                            delay: 5000,
+                            msg: value[0]
+                        });
                     });
+                    return;
+                }
+
+                const message = response.message || response.error || 'Unable to add user. Please try again.';
+                showFormFeedback(form, 'error', message);
+                Lobibox.notify('error', {
+                    size: 'mini',
+                    sound: false,
+                    delay: 5000,
+                    msg: message
                 });
+            },
+            complete: function () {
+                submitButton.prop('disabled', false).text(originalButtonText);
             }
         });
     });

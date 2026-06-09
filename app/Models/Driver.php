@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Driver extends Model
 {
@@ -19,10 +20,15 @@ class Driver extends Model
         'is_active',
     ];
 
+    protected $casts = [
+        'is_active' => 'boolean',
+    ];
+
     /**
-     * Get the sections associated with the trip_ticekt.
+     * Get the trip tickets assigned to the driver.
      */
-    public function tripTickets(): HasMany{
+    public function tripTickets(): HasMany
+    {
         return $this->hasMany(TripTicket::class);
     }
 }

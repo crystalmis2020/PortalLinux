@@ -39,6 +39,12 @@ class MessengerController extends Controller
         $this->touchPresence($authUser);
         $this->ensureValidRecipient($authUser->id, $user);
 
+        $validated = $request->validate([
+            'after_id' => ['nullable', 'integer', 'min:1'],
+            'before_id' => ['nullable', 'integer', 'min:1'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
         $conversation = $this->findOrCreateConversation($authUser->id, $user->id);
 
         MessengerMessage::where('conversation_id', $conversation->id)
@@ -46,17 +52,52 @@ class MessengerController extends Controller
             ->whereNull('read_at')
             ->update(['read_at' => now()]);
 
-        $messages = MessengerMessage::where('conversation_id', $conversation->id)
-            ->orderByDesc('created_at')
-            ->limit(50)
-            ->get()
-            ->sortBy('created_at')
-            ->values();
+        $limit = (int) ($validated['limit'] ?? 50);
+        $afterId = isset($validated['after_id']) ? (int) $validated['after_id'] : null;
+        $beforeId = isset($validated['before_id']) ? (int) $validated['before_id'] : null;
+
+        $messagesQuery = MessengerMessage::where('conversation_id', $conversation->id);
+
+        if ($afterId) {
+            $messages = (clone $messagesQuery)
+                ->where('id', '>', $afterId)
+                ->orderBy('id')
+                ->limit($limit)
+                ->get();
+        } elseif ($beforeId) {
+            $messages = (clone $messagesQuery)
+                ->where('id', '<', $beforeId)
+                ->orderByDesc('id')
+                ->limit($limit)
+                ->get()
+                ->sortBy('id')
+                ->values();
+        } else {
+            $messages = (clone $messagesQuery)
+                ->orderByDesc('id')
+                ->limit($limit)
+                ->get()
+                ->sortBy('id')
+                ->values();
+        }
+
+        $oldestMessageId = $messages->min('id');
+        $newestMessageId = $messages->max('id');
+        $hasMoreOlder = $oldestMessageId
+            ? (clone $messagesQuery)->where('id', '<', $oldestMessageId)->exists()
+            : false;
+        $hasMoreNewer = $newestMessageId
+            ? (clone $messagesQuery)->where('id', '>', $newestMessageId)->exists()
+            : false;
 
         return response()->json([
             'conversation_id' => $conversation->id,
             'contact' => $this->formatContact($user, $authUser->id, true),
             'messages' => $messages->map(fn (MessengerMessage $message) => $this->formatMessagePayload($message, $authUser->id))->values(),
+            'has_more_older' => $hasMoreOlder,
+            'has_more_newer' => $hasMoreNewer,
+            'oldest_message_id' => $oldestMessageId,
+            'newest_message_id' => $newestMessageId,
             'total_unread' => $this->getTotalUnreadCount($authUser->id),
         ]);
     }

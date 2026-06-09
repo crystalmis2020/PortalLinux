@@ -96,7 +96,8 @@
         }
 
         html.dark-theme #inventoryItemModal .form-select,
-        html.dark-theme #releaseInventoryItemModal .form-select {
+        html.dark-theme #releaseInventoryItemModal .form-select,
+        html.dark-theme #editReleaseRecordModal .form-select {
             color: #f4f7fb;
             background-color: #242a2f;
             border-color: rgba(255, 255, 255, 0.16);
@@ -104,7 +105,8 @@
         }
 
         html.dark-theme #inventoryItemModal .form-select option,
-        html.dark-theme #releaseInventoryItemModal .form-select option {
+        html.dark-theme #releaseInventoryItemModal .form-select option,
+        html.dark-theme #editReleaseRecordModal .form-select option {
             color: #f4f7fb;
             background-color: #242a2f;
         }
@@ -114,7 +116,9 @@
         html.dark-theme #inventoryItemModal .form-select,
         html.dark-theme #inventoryItemModal .form-control,
         html.dark-theme #releaseInventoryItemModal .form-select,
-        html.dark-theme #releaseInventoryItemModal .form-control {
+        html.dark-theme #releaseInventoryItemModal .form-control,
+        html.dark-theme #editReleaseRecordModal .form-select,
+        html.dark-theme #editReleaseRecordModal .form-control {
             color: #f4f7fb;
             background-color: #242a2f;
             border-color: rgba(255, 255, 255, 0.16);
@@ -123,13 +127,15 @@
 
         html.dark-theme .inventory-card .form-select,
         html.dark-theme #inventoryItemModal .form-select,
-        html.dark-theme #releaseInventoryItemModal .form-select {
+        html.dark-theme #releaseInventoryItemModal .form-select,
+        html.dark-theme #editReleaseRecordModal .form-select {
             background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23f4f7fb' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
         }
 
         html.dark-theme .inventory-card .form-select option,
         html.dark-theme #inventoryItemModal .form-select option,
-        html.dark-theme #releaseInventoryItemModal .form-select option {
+        html.dark-theme #releaseInventoryItemModal .form-select option,
+        html.dark-theme #editReleaseRecordModal .form-select option {
             color: #f4f7fb;
             background-color: #242a2f;
         }
@@ -340,6 +346,188 @@
         'departments' => $departments,
         'sections' => $sections,
     ])
+
+    <div class="modal fade" id="inventoryItemHistoryModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Inventory Item History</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-4">Item Code</dt>
+                        <dd class="col-sm-8" id="history_item_code"></dd>
+
+                        <dt class="col-sm-4">Item Name</dt>
+                        <dd class="col-sm-8" id="history_item_name"></dd>
+
+                        <dt class="col-sm-4">Original Quantity</dt>
+                        <dd class="col-sm-8" id="history_original_quantity"></dd>
+
+                        <dt class="col-sm-4">Stored Quantity</dt>
+                        <dd class="col-sm-8" id="history_stock_quantity"></dd>
+
+                        <dt class="col-sm-4">Released Quantity</dt>
+                        <dd class="col-sm-8" id="history_released_quantity"></dd>
+
+                        <dt class="col-sm-4">Assigned To</dt>
+                        <dd class="col-sm-8" id="history_assigned_to"></dd>
+
+                        <dt class="col-sm-4">Department</dt>
+                        <dd class="col-sm-8" id="history_department"></dd>
+
+                        <dt class="col-sm-4">Location</dt>
+                        <dd class="col-sm-8" id="history_location"></dd>
+
+                        <dt class="col-sm-4">Status</dt>
+                        <dd class="col-sm-8" id="history_status"></dd>
+
+                        <dt class="col-sm-4">Remarks</dt>
+                        <dd class="col-sm-8" id="history_remarks"></dd>
+                    </dl>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="viewReleaseRecordModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Release Information</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-4">Date</dt>
+                        <dd class="col-sm-8" id="view_release_date"></dd>
+
+                        <dt class="col-sm-4">Item Name</dt>
+                        <dd class="col-sm-8" id="view_release_item_name"></dd>
+
+                        <dt class="col-sm-4">Item Remarks</dt>
+                        <dd class="col-sm-8" id="view_release_item_remarks"></dd>
+
+                        <dt class="col-sm-4">Quantity</dt>
+                        <dd class="col-sm-8" id="view_release_quantity"></dd>
+
+                        <dt class="col-sm-4">Department</dt>
+                        <dd class="col-sm-8" id="view_release_department"></dd>
+
+                        <dt class="col-sm-4">Location</dt>
+                        <dd class="col-sm-8" id="view_release_location"></dd>
+
+                        <dt class="col-sm-4">Purpose</dt>
+                        <dd class="col-sm-8" id="view_release_purpose"></dd>
+
+                        <dt class="col-sm-4">Release Remarks</dt>
+                        <dd class="col-sm-8" id="view_release_remarks"></dd>
+
+                        <dt class="col-sm-4">Released To</dt>
+                        <dd class="col-sm-8" id="view_release_released_to"></dd>
+
+                        <dt class="col-sm-4">Released By</dt>
+                        <dd class="col-sm-8" id="view_release_released_by"></dd>
+                    </dl>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="editReleaseRecordModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <form id="editReleaseRecordForm">
+                @csrf
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Edit Release Record</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-info py-2" id="editReleaseRecordItemNote"></div>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Quantity <span class="text-danger">*</span></label>
+                                <input type="number" class="form-control" name="quantity" id="edit_release_quantity" min="1">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Department</label>
+                                <select class="form-select inventory-department-select" name="department" id="edit_release_department" data-section-target="#edit_release_location">
+                                    <option value="">Select Department</option>
+                                    @foreach ($departments as $department)
+                                        <option value="{{ $department->name }}" data-department-id="{{ $department->id }}">{{ $department->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Location / Section</label>
+                                <select class="form-select inventory-section-select" name="location" id="edit_release_location">
+                                    <option value="">Select Section</option>
+                                    @foreach ($sections as $section)
+                                        <option
+                                            value="{{ $section->name }}"
+                                            data-department-id="{{ $section->department_id }}"
+                                            data-department-name="{{ $section->department?->name }}">
+                                            {{ $section->name }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Purpose</label>
+                                <input type="text" class="form-control" name="purpose" id="edit_release_purpose">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Release Remarks</label>
+                                <textarea class="form-control" rows="3" name="remarks" id="edit_release_remarks"></textarea>
+                            </div>
+                        </div>
+                        <div class="alert alert-danger mt-3 d-none" id="editReleaseRecordFormAlert"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="editReleaseRecordSubmitButton">Save Changes</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal fade" id="deleteReleaseRecordModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <form id="deleteReleaseRecordForm">
+                @csrf
+                <input type="hidden" id="delete_release_record_url">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Delete Release Record</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="mb-0">
+                            Delete the release record for
+                            <span class="fw-semibold" id="delete_release_record_item_name"></span>?
+                        </p>
+                        <div class="alert alert-warning mt-3 mb-0">
+                            This will remove the transaction record and return the released quantity to stored stock.
+                        </div>
+                        <div class="alert alert-danger mt-3 d-none" id="deleteReleaseRecordFormAlert"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger" id="deleteReleaseRecordSubmitButton">Delete</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <div class="modal fade" id="deleteInventoryItemModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">

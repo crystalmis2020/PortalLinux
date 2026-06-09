@@ -39,6 +39,7 @@
                                 <th style="width: 50px;">Name</th>
                                 <th>Department</th>
                                 <th style="width: 100px !important;">Section</th>
+                                <th>Trip Ticket Access</th>
 
                             </tr>
                         </thead>
@@ -60,6 +61,21 @@
                                 <td>{{ $user->full_name }}</td>
                                 <td>{{ $user->department->name ?? 'N/A' }}</td>
                                 <td style="width: 100px !important;">{{ $user->section->name ?? 'N/A' }}</td>
+                                <td>
+                                    @if ($user->canManageTripTickets())
+                                        <span class="badge bg-primary">Manager</span>
+                                    @else
+                                        @if ($user->can_encode_trip_tickets)
+                                            <span class="badge bg-info text-dark">Encoder</span>
+                                        @endif
+                                        @if ($user->can_approve_trip_tickets)
+                                            <span class="badge bg-success">Approver</span>
+                                        @endif
+                                        @if (!$user->can_encode_trip_tickets && !$user->can_approve_trip_tickets)
+                                            <span class="badge bg-secondary">Requester</span>
+                                        @endif
+                                    @endif
+                                </td>
 
                             </tr>
                         @endforeach
@@ -161,6 +177,24 @@
                             <option value="User">User</option>
                             <option value="Admin">Admin</option>
                         </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Trip Ticket Access</label>
+                        <div class="border rounded p-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="1" id="can_encode_trip_tickets" name="can_encode_trip_tickets">
+                                <label class="form-check-label" for="can_encode_trip_tickets">Encoder</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="1" id="can_approve_trip_tickets" name="can_approve_trip_tickets">
+                                <label class="form-check-label" for="can_approve_trip_tickets">Approver</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="1" id="can_manage_trip_tickets" name="can_manage_trip_tickets">
+                                <label class="form-check-label" for="can_manage_trip_tickets">Manager</label>
+                            </div>
+                            <small class="text-muted d-block mt-2">All users can request trip tickets. These options add encoder, approver, or manager access.</small>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">

@@ -9,13 +9,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Support\Facades\Auth;
 use App\Helpers\LogHelper;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable;
 
     /**
      * The attributes that are mass assignable.
@@ -33,6 +34,9 @@ class User extends Authenticatable
         'user_type',
         'is_active',
         'is_sudo',
+        'can_encode_trip_tickets',
+        'can_approve_trip_tickets',
+        'can_manage_trip_tickets',
         'is_login',
         'last_login',
         'last_seen_at',
@@ -60,6 +64,9 @@ class User extends Authenticatable
             'last_login' => 'datetime',
             'last_seen_at' => 'datetime',
             'messenger_presence_visible' => 'boolean',
+            'can_encode_trip_tickets' => 'boolean',
+            'can_approve_trip_tickets' => 'boolean',
+            'can_manage_trip_tickets' => 'boolean',
         ];
     }
 
@@ -130,6 +137,21 @@ class User extends Authenticatable
         return $this->hasMany(ReportLog::class, 'user_id');
     }
 
+    public function requestedTripTickets(): HasMany
+    {
+        return $this->hasMany(TripTicket::class, 'requested_by');
+    }
+
+    public function encodedTripTickets(): HasMany
+    {
+        return $this->hasMany(TripTicket::class, 'encoded_by');
+    }
+
+    public function approvedTripTickets(): HasMany
+    {
+        return $this->hasMany(TripTicket::class, 'approved_by');
+    }
+
     public function sentMessengerMessages(): HasMany
     {
         return $this->hasMany(MessengerMessage::class, 'sender_id');
@@ -156,6 +178,26 @@ class User extends Authenticatable
     public function canManageInventory(): bool
     {
         return $this->isAdmin() || $this->isMisMember() || $this->is_sudo;
+    }
+
+    public function canEncodeTripTickets(): bool
+    {
+        return $this->canManageTripTickets() || $this->can_encode_trip_tickets;
+    }
+
+    public function canApproveTripTickets(): bool
+    {
+        return $this->canManageTripTickets() || $this->can_approve_trip_tickets;
+    }
+
+    public function canManageTripTickets(): bool
+    {
+        return $this->isAdmin() || $this->is_sudo || $this->can_manage_trip_tickets;
+    }
+
+    public function canPrintTripTickets(): bool
+    {
+        return $this->canManageTripTickets() || $this->canEncodeTripTickets();
     }
 
     public function isCurrentlyOnline(int $minutes = 2): bool

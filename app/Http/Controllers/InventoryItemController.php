@@ -27,12 +27,17 @@ class InventoryItemController extends Controller
     {
         $this->ensureAccess();
 
-        $items = InventoryItem::query()
-            ->latest()
-            ->latest('id')
-            ->get();
         $supportsStockQuantity = $this->supportsStockQuantity();
         $supportsReleaseRecords = $this->supportsReleaseRecords();
+        $itemsQuery = InventoryItem::query()
+            ->latest()
+            ->latest('id');
+
+        if ($supportsReleaseRecords) {
+            $itemsQuery->withSum('releases as released_quantity', 'quantity');
+        }
+
+        $items = $itemsQuery->get();
         $releases = $this->releaseRecords();
         $departments = Department::query()
             ->orderBy('name')
@@ -144,6 +149,86 @@ class InventoryItemController extends Controller
         return response()->json([
             'success' => 'Inventory item released successfully.',
             'item' => $inventoryItem->fresh(),
+        ]);
+    }
+
+    public function updateRelease(
+        ReleaseInventoryItemRequest $request,
+        InventoryItemRelease $inventoryItemRelease
+    ): JsonResponse {
+        if (!$this->supportsStockQuantity() || !$this->supportsReleaseRecords()) {
+            return response()->json([
+                'message' => 'Inventory release storage is not ready. Please run the latest migrations first.',
+            ], 422);
+        }
+
+        $payload = $request->validated();
+
+        DB::transaction(function () use ($inventoryItemRelease, $payload): void {
+            $release = InventoryItemRelease::query()
+                ->whereKey($inventoryItemRelease->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $lockedItem = InventoryItem::query()
+                ->whereKey($release->inventory_item_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $quantityDifference = $payload['quantity'] - $release->quantity;
+
+            if ($quantityDifference > $lockedItem->stock_quantity) {
+                throw ValidationException::withMessages([
+                    'quantity' => ['Only ' . $lockedItem->stock_quantity . ' additional item(s) are available.'],
+                ]);
+            }
+
+            if ($quantityDifference > 0) {
+                $lockedItem->decrement('stock_quantity', $quantityDifference);
+            } elseif ($quantityDifference < 0) {
+                $lockedItem->increment('stock_quantity', abs($quantityDifference));
+            }
+
+            $release->update([
+                'quantity' => $payload['quantity'],
+                'department' => $payload['department'] ?? null,
+                'location' => $payload['location'] ?? null,
+                'purpose' => $payload['purpose'] ?? null,
+                'remarks' => $payload['remarks'] ?? null,
+            ]);
+        });
+
+        return response()->json([
+            'success' => 'Release record updated successfully.',
+        ]);
+    }
+
+    public function destroyRelease(InventoryItemRelease $inventoryItemRelease): JsonResponse
+    {
+        $this->ensureAccess();
+
+        if (!$this->supportsStockQuantity() || !$this->supportsReleaseRecords()) {
+            return response()->json([
+                'message' => 'Inventory release storage is not ready. Please run the latest migrations first.',
+            ], 422);
+        }
+
+        DB::transaction(function () use ($inventoryItemRelease): void {
+            $release = InventoryItemRelease::query()
+                ->whereKey($inventoryItemRelease->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            InventoryItem::query()
+                ->whereKey($release->inventory_item_id)
+                ->lockForUpdate()
+                ->increment('stock_quantity', $release->quantity);
+
+            $release->delete();
+        });
+
+        return response()->json([
+            'success' => 'Release record deleted successfully.',
         ]);
     }
 

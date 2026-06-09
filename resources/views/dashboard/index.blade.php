@@ -216,6 +216,8 @@
 @php
     $totalReports = $previousReports->count();
     $resolvedReportCount = $resolvedNotifications->count();
+    $attachmentMaxBytes = attachmentMaxUploadBytes();
+    $attachmentMaxLabel = attachmentMaxUploadLabel();
 @endphp
 
 <div class="support-dashboard">
@@ -280,7 +282,7 @@
                         <label for="attachment" class="form-label">Attached File</label>
                         <div class="file-picker-shell">
                             <input type="file" class="form-control" id="attachment" name="attachment" onchange="previewAttachment(this)">
-                            <small class="text-muted d-block mt-2">jpg, jpeg, png, pdf, doc, docx, xls, xlsx, txt up to 20MB</small>
+                            <small class="text-muted d-block mt-2">jpg, jpeg, png, pdf, doc, docx, xls, xlsx, txt up to {{ $attachmentMaxLabel }}</small>
                             <div class="attachment-meta" id="attachmentMeta">
                                 <span id="attachmentName"></span>
                                 <button type="button" class="btn btn-sm btn-outline-secondary" id="clearAttachment" aria-label="Clear attached file">
@@ -445,6 +447,30 @@
             });
         }
 
+        const allowedAttachmentExtensions = ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'];
+        const maxAttachmentBytes = @json($attachmentMaxBytes);
+        const maxAttachmentLabel = @json($attachmentMaxLabel);
+
+        function validateAttachmentFile(file) {
+            if (!file) {
+                return null;
+            }
+
+            const extension = file.name.includes('.')
+                ? file.name.split('.').pop().toLowerCase()
+                : '';
+
+            if (!allowedAttachmentExtensions.includes(extension)) {
+                return 'Unsupported file type. Please upload jpg, jpeg, png, pdf, doc, docx, xls, xlsx, or txt.';
+            }
+
+            if (file.size > maxAttachmentBytes) {
+                return `Attachment is too large. Please choose a file up to ${maxAttachmentLabel}.`;
+            }
+
+            return null;
+        }
+
         function setSubmitLoading(isLoading) {
             const button = $('.btn-submit-report');
             button.prop('disabled', isLoading);
@@ -526,6 +552,14 @@
                     return;
                 }
 
+                const attachment = document.getElementById('attachment')?.files?.[0] || null;
+                const attachmentError = validateAttachmentFile(attachment);
+
+                if (attachmentError) {
+                    notifyUser('error', attachmentError);
+                    return;
+                }
+
                 setSubmitLoading(true);
 
                 const formData = new FormData(this);
@@ -583,11 +617,16 @@
                     },
                     error: function (xhr) {
                         const errors = xhr.responseJSON && xhr.responseJSON.errors;
+                        const message = xhr.responseJSON && xhr.responseJSON.message;
 
                         if (errors) {
                             $.each(errors, function (key, value) {
                                 notifyUser('error', value[0]);
                             });
+                        } else if (xhr.status === 413) {
+                            notifyUser('error', `Attachment is too large. Please choose a file up to ${maxAttachmentLabel}.`);
+                        } else if (message) {
+                            notifyUser('error', message);
                         } else {
                             notifyUser('error', 'Something went wrong while submitting the report.');
                         }

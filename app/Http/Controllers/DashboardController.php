@@ -101,8 +101,8 @@ class DashboardController extends Controller
             ]);
         }
 
-        // Only resolved reports should pause new submissions until the user
-        // reviews or closes them.
+        // Resolved reports must be reviewed and closed before users can submit
+        // another report.
         $openStatuses = ['resolved'];
 
         $openReports = Report::where('reported_by', $user->id)
@@ -112,10 +112,9 @@ class DashboardController extends Controller
         if ($openReports > 0) {
             return response()->json([
                 'success' => false,
-                'message' => 'You still have ' . $openReports . ' open report(s). Please wait for them to be closed before sending a new one.',
+                'message' => 'You still have ' . $openReports . ' resolved report(s). Please review and close them before sending a new one.',
             ]);
         }
-
 
         // Validate the request
         $request->validate(
@@ -132,6 +131,8 @@ class DashboardController extends Controller
                 'issue_id.exists' => 'Please select a valid issue category.',
                 'section_id.required' => 'Please select a section.',
                 'section_id.exists' => 'Please select a valid section.',
+                'attachment.max' => 'Attachment is too large. Please choose a file up to ' . attachmentMaxUploadLabel() . '.',
+                'attachment.extensions' => 'Unsupported file type. Please upload jpg, jpeg, png, pdf, doc, docx, xls, xlsx, or txt.',
             ]
         );
 
@@ -166,7 +167,8 @@ class DashboardController extends Controller
         // Handle single file upload
         if ($request->hasFile('attachment')) {
             $file = $request->file('attachment');
-            $filename = time() . '_' . $file->getClientOriginalName();
+            $extension = strtolower($file->getClientOriginalExtension());
+            $filename = uniqid('report_', true) . ($extension ? '.' . $extension : '');
             $uploadDir = public_path('uploads/reports');
 
             if (!File::exists($uploadDir)) {

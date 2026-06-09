@@ -54,6 +54,15 @@
                             </a>
                             <button
                                 type="button"
+                                class="btn btn-sm btn-outline-info view-inventory-item-history"
+                                data-item='@json($item)'
+                                data-bs-toggle="tooltip"
+                                data-bs-title="History"
+                                aria-label="View inventory item history">
+                                <i class="bx bx-history"></i>
+                            </button>
+                            <button
+                                type="button"
                                 class="btn btn-sm btn-outline-danger delete-inventory-item"
                                 data-delete-url="{{ route('inventory-items.destroy', $item) }}"
                                 data-item-name="{{ $item->item_code }} - {{ $item->item_name }}"

@@ -1350,7 +1350,7 @@
                         <textarea id="portalMessengerInput" placeholder="Write a message..." disabled></textarea>
                     </div>
                     <div class="portal-messenger__composer-actions">
-                        <input type="file" id="portalMessengerAttachment" class="d-none" accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx,.txt">
+                        <input type="file" id="portalMessengerAttachment" class="d-none">
                         <button type="button" class="portal-messenger__attach" id="portalMessengerAttach" title="Attach file" disabled>
                             <i class='bx bx-paperclip'></i>
                         </button>
@@ -1492,6 +1492,10 @@
             messages: [],
             isOpen: false,
             isLoadingConversation: false,
+            isSyncingConversation: false,
+            isLoadingOlderMessages: false,
+            hasMoreOlderMessages: false,
+            hasMoreNewerMessages: false,
             conversationRequestId: 0,
             search: '',
             totalUnread: Number(root.dataset.initialUnread || 0),
@@ -2033,6 +2037,20 @@
 
         function conversationRouteFor(template, conversationId) {
             return template.replace('__CONVERSATION__', String(conversationId));
+        }
+
+        function conversationUrlFor(userId, params = {}) {
+            const query = new URLSearchParams();
+            Object.entries(params).forEach(([key, value]) => {
+                if (value !== null && value !== undefined && value !== '') {
+                    query.set(key, String(value));
+                }
+            });
+
+            const route = routeFor(root.dataset.conversationUrlTemplate, userId);
+            const queryString = query.toString();
+
+            return queryString ? `${route}?${queryString}` : route;
         }
 
         async function sendCallSignal(userId, payload) {
@@ -2858,6 +2876,88 @@
             }).join('');
         }
 
+        function getOldestLoadedMessageId() {
+            return state.messages.reduce((oldest, message) => {
+                const id = Number(message.id || 0);
+                return id && (!oldest || id < oldest) ? id : oldest;
+            }, null);
+        }
+
+        function getNewestLoadedMessageId() {
+            return state.messages.reduce((newest, message) => {
+                const id = Number(message.id || 0);
+                return id && id > newest ? id : newest;
+            }, 0);
+        }
+
+        function mergeMessages(messages, placement = 'append') {
+            if (!Array.isArray(messages) || !messages.length) {
+                return false;
+            }
+
+            const knownIds = new Set(state.messages.map((message) => Number(message.id)));
+            const freshMessages = messages.filter((message) => {
+                const id = Number(message.id || 0);
+                return id && !knownIds.has(id);
+            });
+
+            if (!freshMessages.length) {
+                return false;
+            }
+
+            state.messages = placement === 'prepend'
+                ? freshMessages.concat(state.messages)
+                : state.messages.concat(freshMessages);
+
+            state.messages.sort((a, b) => Number(a.id || 0) - Number(b.id || 0));
+
+            return true;
+        }
+
+        function applyConversationPayload(data, requestedUserId, { replace = false, placement = 'append', updateOlder = true } = {}) {
+            let changed = false;
+
+            if (replace) {
+                state.messages = data.messages || [];
+                changed = true;
+            } else {
+                changed = mergeMessages(data.messages || [], placement);
+            }
+
+            state.conversationId = data.conversation_id || state.conversationId || null;
+            state.totalUnread = Number(data.total_unread || 0);
+            if (updateOlder) {
+                state.hasMoreOlderMessages = Boolean(data.has_more_older);
+            }
+            state.hasMoreNewerMessages = Boolean(data.has_more_newer);
+            updateBadge();
+
+            if (data.contact) {
+                const idx = state.contacts.findIndex((item) => Number(item.id) === requestedUserId);
+                if (idx !== -1) {
+                    state.contacts[idx] = {
+                        ...state.contacts[idx],
+                        ...data.contact,
+                        unread_count: 0,
+                    };
+                }
+            }
+
+            upsertContacts(state.contacts);
+            renderContacts();
+
+            return changed;
+        }
+
+        function resetConversationWindow() {
+            state.conversationId = null;
+            state.messages = [];
+            state.hasMoreOlderMessages = false;
+            state.hasMoreNewerMessages = false;
+            state.isLoadingOlderMessages = false;
+            state.isSyncingConversation = false;
+        }
+
         function renderMessages(options = {}) {
             const hasSelectedUser = Boolean(state.selectedUserId) && !isMultiMode();
             const hasMessages = state.messages.length > 0;
@@ -2907,7 +3007,9 @@
                 </div>
             `).join('');
 
-            if (options.preserveScroll && previousScrollHeight > 0 && !wasNearBottom) {
+            if (options.preserveTop && previousScrollHeight > 0) {
+                elements.messages.scrollTop = previousScrollTop + (elements.messages.scrollHeight - previousScrollHeight);
+            } else if (options.preserveScroll && previousScrollHeight > 0 && !wasNearBottom) {
                 elements.messages.scrollTop = Math.max(
                     0,
                     elements.messages.scrollHeight - elements.messages.clientHeight - previousDistanceFromBottom
@@ -2921,6 +3023,9 @@
 
         function setLoading(isLoading) {
             state.isLoadingConversation = isLoading;
+            if (isLoading) {
+                elements.loading.textContent = 'Syncing conversation...';
+            }
             elements.loading.classList.toggle('is-visible', isLoading);
             updateComposerState();
         }
@@ -3176,6 +3281,7 @@
 
             if (state.selectedUserId !== requestedUserId) {
                 cancelReportRangeSelection();
+                resetConversationWindow();
             }
 
             state.selectedUserId = requestedUserId;
@@ -3188,30 +3294,13 @@
             }
 
             try {
-                const data = await request(routeFor(root.dataset.conversationUrlTemplate, requestedUserId));
+                const data = await request(conversationUrlFor(requestedUserId, { limit: 50 }));
 
                 if (requestId !== state.conversationRequestId || state.selectedUserId !== requestedUserId) {
                     return;
                 }
 
-                state.messages = data.messages || [];
-                state.conversationId = data.conversation_id || null;
-                state.totalUnread = Number(data.total_unread || 0);
-                updateBadge();
-
-                if (data.contact) {
-                    const idx = state.contacts.findIndex((item) => Number(item.id) === requestedUserId);
-                    if (idx !== -1) {
-                        state.contacts[idx] = {
-                            ...state.contacts[idx],
-                            ...data.contact,
-                            unread_count: 0,
-                        };
-                    }
-                }
-
-                upsertContacts(state.contacts);
-                renderContacts();
+                applyConversationPayload(data, requestedUserId, { replace: true });
                 renderMessages({
                     preserveScroll: Boolean(options.preserveScroll),
                 });
@@ -3231,6 +3320,88 @@
             } finally {
                 if (!silent && requestId === state.conversationRequestId) {
                     setLoading(false);
+                }
+            }
+        }
+
+        async function syncSelectedConversation(options = {}) {
+            if (!state.selectedUserId || isMultiMode() || state.isLoadingConversation || state.isSyncingConversation) {
+                return;
+            }
+
+            const requestedUserId = Number(state.selectedUserId);
+            const newestMessageId = getNewestLoadedMessageId();
+
+            if (!newestMessageId) {
+                return openConversation(requestedUserId, true, { preserveScroll: true });
+            }
+
+            state.isSyncingConversation = true;
+
+            try {
+                const data = await request(conversationUrlFor(requestedUserId, {
+                    after_id: newestMessageId,
+                    limit: 100,
+                }));
+
+                if (state.selectedUserId !== requestedUserId || isMultiMode()) {
+                    return;
+                }
+
+                const changed = applyConversationPayload(data, requestedUserId, { updateOlder: false });
+
+                if (changed || options.forceRender) {
+                    renderMessages({ preserveScroll: true });
+                }
+            } finally {
+                if (state.selectedUserId === requestedUserId) {
+                    state.isSyncingConversation = false;
+                }
+            }
+        }
+
+        async function loadOlderMessages() {
+            if (
+                !state.selectedUserId
+                || isMultiMode()
+                || state.isLoadingConversation
+                || state.isLoadingOlderMessages
+                || !state.hasMoreOlderMessages
+            ) {
+                return;
+            }
+
+            const requestedUserId = Number(state.selectedUserId);
+            const oldestMessageId = getOldestLoadedMessageId();
+
+            if (!oldestMessageId) {
+                return;
+            }
+
+            state.isLoadingOlderMessages = true;
+            elements.loading.textContent = 'Loading older messages...';
+            elements.loading.classList.add('is-visible');
+
+            try {
+                const data = await request(conversationUrlFor(requestedUserId, {
+                    before_id: oldestMessageId,
+                    limit: 50,
+                }));
+
+                if (state.selectedUserId !== requestedUserId || isMultiMode()) {
+                    return;
+                }
+
+                const changed = applyConversationPayload(data, requestedUserId, { placement: 'prepend' });
+
+                if (changed) {
+                    renderMessages({ preserveTop: true });
+                }
+            } finally {
+                if (state.selectedUserId === requestedUserId) {
+                    state.isLoadingOlderMessages = false;
+                    elements.loading.textContent = 'Syncing conversation...';
+                    elements.loading.classList.remove('is-visible');
                 }
             }
         }
@@ -3363,7 +3534,7 @@
             elements.multiMode.classList.toggle('is-active', state.composeMode === 'multi');
 
             if (isMultiMode()) {
-                state.messages = [];
+                resetConversationWindow();
                 state.selectedUserId = null;
             } else {
                 state.selectedRecipientIds = [];
@@ -3431,7 +3602,7 @@
                     await fetchContacts();
 
                     if (state.selectedUserId && !isMultiMode()) {
-                        await openConversation(state.selectedUserId, true, { preserveScroll: true });
+                        await syncSelectedConversation();
                     }
                 } catch (error) {
                     // Keep the widget quiet during background polling.
@@ -3450,7 +3621,7 @@
             refresh() {
                 return fetchContacts().then(function () {
                     if (state.selectedUserId && !isMultiMode()) {
-                        return openConversation(state.selectedUserId, true, { preserveScroll: true });
+                        return syncSelectedConversation({ forceRender: true });
                     }
                 });
             },
@@ -3481,7 +3652,7 @@
             }
 
             state.selectedUserId = null;
-            state.messages = [];
+            resetConversationWindow();
             renderContacts();
             renderMessages();
         });
@@ -3504,7 +3675,7 @@
             fetchContacts()
                 .then(function () {
                     if (state.selectedUserId && !isMultiMode()) {
-                        return openConversation(state.selectedUserId, false, { preserveScroll: true });
+                        return syncSelectedConversation({ forceRender: true });
                     }
                 })
                 .catch(function () {});
@@ -3633,6 +3804,12 @@
             });
         });
 
+        elements.messages.addEventListener('scroll', function () {
+            if (elements.messages.scrollTop <= 80) {
+                loadOlderMessages().catch(function () {});
+            }
+        });
+
         elements.attachmentModalClose.addEventListener('click', hideAttachmentModal);
         elements.attachmentModalCloseFooter.addEventListener('click', hideAttachmentModal);
         elements.attachmentModal.addEventListener('click', function (event) {
@@ -3732,7 +3909,7 @@
             fetchContacts()
                 .then(function () {
                     if (state.selectedUserId === senderId && !isMultiMode()) {
-                        return openConversation(senderId, true, { preserveScroll: true });
+                        return syncSelectedConversation({ forceRender: true });
                     }
                 })
                 .catch(function () {});

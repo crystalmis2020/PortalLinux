@@ -159,8 +159,73 @@ if (!function_exists('attachmentValidationRule')) {
      *
      * @return string
      */
-    function attachmentValidationRule(): string
+    function attachmentValidationRule(bool $required = false): string
     {
-        return 'nullable|file|mimes:jpg,jpeg,png,pdf,doc,docx,xls,xlsx,txt|max:20480'; // Max 20MB
+        $presenceRule = $required ? 'required' : 'nullable';
+
+        return $presenceRule . '|file|extensions:jpg,jpeg,png,pdf,doc,docx,xls,xlsx,txt|max:' . attachmentMaxUploadKilobytes();
+    }
+}
+
+if (!function_exists('iniUploadSizeToBytes')) {
+    function iniUploadSizeToBytes(string $value): int
+    {
+        $value = trim($value);
+
+        if ($value === '') {
+            return 0;
+        }
+
+        $unit = strtolower(substr($value, -1));
+        $bytes = (float) $value;
+
+        switch ($unit) {
+            case 'g':
+                $bytes *= 1024;
+                // no break
+            case 'm':
+                $bytes *= 1024;
+                // no break
+            case 'k':
+                $bytes *= 1024;
+                break;
+        }
+
+        return (int) $bytes;
+    }
+}
+
+if (!function_exists('attachmentMaxUploadBytes')) {
+    function attachmentMaxUploadBytes(): int
+    {
+        $configuredLimit = 20 * 1024 * 1024;
+        $uploadLimit = iniUploadSizeToBytes((string) ini_get('upload_max_filesize'));
+        $postLimit = iniUploadSizeToBytes((string) ini_get('post_max_size'));
+
+        $limits = array_filter([$configuredLimit, $uploadLimit, $postLimit]);
+
+        return min($limits);
+    }
+}
+
+if (!function_exists('attachmentMaxUploadKilobytes')) {
+    function attachmentMaxUploadKilobytes(): int
+    {
+        return max(1, (int) floor(attachmentMaxUploadBytes() / 1024));
+    }
+}
+
+if (!function_exists('attachmentMaxUploadLabel')) {
+    function attachmentMaxUploadLabel(): string
+    {
+        $bytes = attachmentMaxUploadBytes();
+
+        if ($bytes >= 1024 * 1024) {
+            $megabytes = $bytes / (1024 * 1024);
+
+            return rtrim(rtrim(number_format($megabytes, 1), '0'), '.') . 'MB';
+        }
+
+        return max(1, (int) floor($bytes / 1024)) . 'KB';
     }
 }

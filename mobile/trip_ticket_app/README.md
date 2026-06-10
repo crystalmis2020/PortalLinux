@@ -19,13 +19,13 @@ For APK generation later, the server still needs an Android SDK and Java/JDK set
 The app reads the API base URL from a Dart define:
 
 ```bash
-flutter run --dart-define=API_BASE_URL=https://128.0.254.20/support
+flutter run --dart-define=API_BASE_URL=http://128.0.254.20/support
 ```
 
 For APK:
 
 ```bash
-flutter build apk --release --dart-define=API_BASE_URL=https://128.0.254.20/support
+flutter build apk --release --dart-define=API_BASE_URL=http://128.0.254.20/support
 ```
 
 APK output:
@@ -45,12 +45,17 @@ flutter doctor
 flutter pub get
 flutter analyze
 flutter test
-flutter build apk --release --dart-define=API_BASE_URL=https://128.0.254.20/support
+flutter build apk --release --dart-define=API_BASE_URL=http://128.0.254.20/support
 ```
 
 The current release build is suitable for internal testing and uses Android's
 debug signing key. Configure a private release keystore before public
 distribution.
+
+The HTTP URL is intended only for the trusted internal network. Before
+distribution outside that network, install a publicly trusted TLS certificate
+on the server, switch `API_BASE_URL` to HTTPS, and remove
+`android:usesCleartextTraffic="true"`.
 
 ## Test Account
 

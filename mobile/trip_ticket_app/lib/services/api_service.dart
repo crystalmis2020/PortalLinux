@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
@@ -25,10 +27,11 @@ class ApiService {
 
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'https://128.0.254.20/support',
+    defaultValue: 'http://128.0.254.20/support',
   );
 
   static const String _tokenKey = 'trip_ticket_token';
+  static const Duration _requestTimeout = Duration(seconds: 15);
 
   final http.Client _client;
   final FlutterSecureStorage _storage;
@@ -37,14 +40,16 @@ class ApiService {
     required String username,
     required String password,
   }) async {
-    final response = await _client.post(
-      _uri('/api/login'),
-      headers: _headers(),
-      body: jsonEncode({
-        'username': username,
-        'password': password,
-        'device_name': 'flutter-mobile',
-      }),
+    final response = await _request(
+      _client.post(
+        _uri('/api/login'),
+        headers: _headers(),
+        body: jsonEncode({
+          'username': username,
+          'password': password,
+          'device_name': 'flutter-mobile',
+        }),
+      ),
     );
 
     final data = _decode(response);
@@ -64,9 +69,11 @@ class ApiService {
       return null;
     }
 
-    final response = await _client.get(
-      _uri('/api/me'),
-      headers: _headers(token: token),
+    final response = await _request(
+      _client.get(
+        _uri('/api/me'),
+        headers: _headers(token: token),
+      ),
     );
 
     final data = _decode(response);
@@ -76,9 +83,11 @@ class ApiService {
   Future<void> logout() async {
     final token = await _storage.read(key: _tokenKey);
     if (token != null && token.isNotEmpty) {
-      await _client.post(
-        _uri('/api/logout'),
-        headers: _headers(token: token),
+      await _request(
+        _client.post(
+          _uri('/api/logout'),
+          headers: _headers(token: token),
+        ),
       );
     }
 
@@ -90,9 +99,11 @@ class ApiService {
   }
 
   Future<List<TripTicket>> ticketsForApproval() async {
-    final response = await _client.get(
-      _uri('/api/trip-tickets/for-approval'),
-      headers: await _authHeaders(),
+    final response = await _request(
+      _client.get(
+        _uri('/api/trip-tickets/for-approval'),
+        headers: await _authHeaders(),
+      ),
     );
 
     final data = _decode(response);
@@ -103,9 +114,11 @@ class ApiService {
   }
 
   Future<TripTicket> ticket(int id) async {
-    final response = await _client.get(
-      _uri('/api/trip-tickets/$id'),
-      headers: await _authHeaders(),
+    final response = await _request(
+      _client.get(
+        _uri('/api/trip-tickets/$id'),
+        headers: await _authHeaders(),
+      ),
     );
 
     final data = _decode(response);
@@ -129,10 +142,12 @@ class ApiService {
     String action,
     String remarks,
   ) async {
-    final response = await _client.post(
-      _uri('/api/trip-tickets/$id/$action'),
-      headers: await _authHeaders(),
-      body: jsonEncode({'approval_remarks': remarks}),
+    final response = await _request(
+      _client.post(
+        _uri('/api/trip-tickets/$id/$action'),
+        headers: await _authHeaders(),
+        body: jsonEncode({'approval_remarks': remarks}),
+      ),
     );
 
     final data = _decode(response);
@@ -159,10 +174,37 @@ class ApiService {
     return Uri.parse('$baseUrl$path');
   }
 
+  Future<http.Response> _request(Future<http.Response> request) async {
+    try {
+      return await request.timeout(_requestTimeout);
+    } on HandshakeException {
+      throw ApiException(
+        'The server certificate is not trusted by this device.',
+      );
+    } on SocketException {
+      throw ApiException(
+        'Cannot reach the server. Check Wi-Fi and the API address.',
+      );
+    } on TimeoutException {
+      throw ApiException('The server did not respond in time.');
+    } on http.ClientException {
+      throw ApiException('Cannot connect to the server.');
+    }
+  }
+
   Map<String, dynamic> _decode(http.Response response) {
-    final dynamic decoded = response.body.isEmpty
-        ? <String, dynamic>{}
-        : jsonDecode(response.body);
+    dynamic decoded;
+
+    try {
+      decoded = response.body.isEmpty
+          ? <String, dynamic>{}
+          : jsonDecode(response.body);
+    } on FormatException {
+      throw ApiException(
+        'The server returned an invalid response.',
+        statusCode: response.statusCode,
+      );
+    }
 
     final data = decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
 

@@ -82,16 +82,18 @@ class ApiService {
 
   Future<void> logout() async {
     final token = await _storage.read(key: _tokenKey);
-    if (token != null && token.isNotEmpty) {
-      await _request(
-        _client.post(
-          _uri('/api/logout'),
-          headers: _headers(token: token),
-        ),
-      );
+    try {
+      if (token != null && token.isNotEmpty) {
+        await _request(
+          _client.post(
+            _uri('/api/logout'),
+            headers: _headers(token: token),
+          ),
+        );
+      }
+    } finally {
+      await clearToken();
     }
-
-    await clearToken();
   }
 
   Future<void> clearToken() async {

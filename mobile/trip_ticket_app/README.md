@@ -1,6 +1,8 @@
-# Trip Ticket Flutter App
+# Support Portal Mobile App
 
-This is the mobile approval app skeleton for the Support Portal trip ticket workflow.
+This is the mobile version of the Support Portal. The application shell includes
+Trip Ticket and Mess Hall navigation. Trip Ticket approval is the active module;
+Mess Hall is reserved for the next development phase.
 
 ## Server Requirement
 

@@ -1,8 +1,8 @@
 name: trip_ticket_app
-description: Trip ticket mobile approval app.
+description: Mobile Support Portal for Trip Ticket and Mess Hall workflows.
 publish_to: "none"
 
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
@@ -21,3 +21,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/images/portal_mark.png

@@ -17,6 +17,7 @@ use App\Http\Controllers\InventoryItemController;
 use App\Http\Controllers\MessengerController;
 use App\Http\Controllers\InternetAccessRequestController;
 use App\Http\Controllers\TripTicketController;
+use App\Http\Controllers\TripTicketLocationController;
 
 
 use App\Http\Controllers\ReportsBackTransferController;
@@ -56,6 +57,8 @@ Route::middleware(['auth'])->prefix('messenger')->name('messenger.')->controller
 Route::middleware(['auth'])->prefix('internet-access')->name('internet-access.')->controller(InternetAccessRequestController::class)->group(function () {
     Route::get('/', 'index')->name('index');
     Route::post('/', 'store')->name('store');
+    Route::get('/{tripTicket}/edit', 'edit')->name('edit');
+    Route::put('/{tripTicket}', 'update')->name('update');
     Route::get('/status/{internetAccessRequest}', 'status')->name('status');
 });
 
@@ -111,10 +114,19 @@ Route::middleware(['auth'])->group(function () {
 });
 
 // Trip Tickets
+Route::middleware(['auth'])->prefix('trip-tickets/locations')->name('trip-tickets.locations.')->controller(TripTicketLocationController::class)->group(function () {
+    Route::get('/regions', 'regions')->name('regions');
+    Route::get('/provinces', 'provinces')->name('provinces');
+    Route::get('/cities', 'cities')->name('cities');
+    Route::get('/{tripTicketLocation}/distance', 'distance')->name('distance');
+});
+
 Route::middleware(['auth'])->prefix('trip-tickets')->name('trip-tickets.')->controller(TripTicketController::class)->group(function () {
     Route::get('/', 'index')->name('index');
     Route::get('/create', 'create')->name('create');
     Route::post('/', 'store')->name('store');
+    Route::get('/{tripTicket}/edit', 'edit')->name('edit');
+    Route::put('/{tripTicket}', 'update')->name('update');
     Route::post('/{tripTicket}/encode', 'encode')->name('encode');
     Route::get('/{tripTicket}/print', 'print')->name('print');
     Route::get('/{tripTicket}', 'show')->name('show');
@@ -124,6 +136,8 @@ Route::middleware(['auth'])->prefix('trip-tickets')->name('trip-tickets.')->cont
 Route::middleware(['auth'])->prefix('inventory-items')->name('inventory-items.')->controller(InventoryItemController::class)->group(function () {
     Route::get('/', 'index')->name('index');
     Route::post('/', 'store')->name('store');
+    Route::get('/{tripTicket}/edit', 'edit')->name('edit');
+    Route::put('/{tripTicket}', 'update')->name('update');
     Route::put('/{inventoryItem}', 'update')->name('update');
     Route::delete('/{inventoryItem}', 'destroy')->name('destroy');
     Route::post('/{inventoryItem}/release', 'release')->name('release');

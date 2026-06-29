@@ -77,7 +77,6 @@
                 <table class="table align-middle trip-ticket-table">
                     <thead class="table-light">
                         <tr>
-                            <th>Request</th>
                             <th>Schedule</th>
                             <th>Destination</th>
                             <th>Requester</th>
@@ -89,10 +88,6 @@
                     <tbody>
                         @forelse ($tickets as $ticket)
                             <tr>
-                                <td>
-                                    <div class="fw-semibold">{{ $ticket->ticket_number ?: 'Request #' . $ticket->id }}</div>
-                                    <div class="text-muted small">{{ $ticket->created_at?->format('M d, Y h:i A') }}</div>
-                                </td>
                                 <td>
                                     <div>{{ $ticket->requested_start_datetime?->format('M d, Y h:i A') }}</div>
                                     <div class="text-muted small">{{ $ticket->requested_end_datetime?->format('M d, Y h:i A') }}</div>
@@ -112,7 +107,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7" class="text-center text-muted py-4">No trip ticket requests found.</td>
+                                <td colspan="6" class="text-center text-muted py-4">No trip ticket requests found.</td>
                             </tr>
                         @endforelse
                     </tbody>

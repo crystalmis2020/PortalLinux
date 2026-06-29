@@ -38,6 +38,11 @@
                         <p class="text-muted small mb-0">Submitted {{ $ticket->created_at?->format('M d, Y h:i A') }}</p>
                     </div>
                     <div class="d-flex flex-wrap align-items-center gap-2">
+                        @if ($canEditRequest)
+                            <a href="{{ route('trip-tickets.edit', $ticket) }}" class="btn btn-outline-secondary btn-sm">
+                                <i class="bx bx-edit me-1"></i>Edit
+                            </a>
+                        @endif
                         @if ($ticket->status === \App\Models\TripTicket::STATUS_APPROVED)
                             <a href="{{ route('trip-tickets.print', $ticket) }}" class="btn btn-outline-primary btn-sm" target="_blank">
                                 <i class="bx bx-printer me-1"></i>Print
@@ -64,9 +69,13 @@
                             <div class="text-muted small">Requested Return</div>
                             <div class="fw-semibold">{{ $ticket->requested_end_datetime?->format('M d, Y h:i A') }}</div>
                         </div>
-                        <div class="col-12">
+                        <div class="col-12 col-md-8">
                             <div class="text-muted small">Destination</div>
                             <div class="fw-semibold">{{ $ticket->destination }}</div>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <div class="text-muted small">Road KM from Maramag</div>
+                            <div class="fw-semibold">{{ $ticket->distance_km !== null ? number_format($ticket->distance_km, 2) . ' km' : 'N/A' }}</div>
                         </div>
                         <div class="col-12">
                             <div class="text-muted small">Purpose</div>
@@ -98,17 +107,6 @@
                     @if ($canEncodeDetails)
                         <form method="POST" action="{{ route('trip-tickets.encode', $ticket) }}">
                             @csrf
-
-                            <div class="mb-3">
-                                <label for="ticket_number" class="form-label">Ticket Number</label>
-                                <input
-                                    type="text"
-                                    class="form-control"
-                                    id="ticket_number"
-                                    name="ticket_number"
-                                    value="{{ old('ticket_number', $ticket->ticket_number) }}"
-                                    placeholder="Auto-generated if blank">
-                            </div>
                             <div class="mb-3">
                                 <label for="vehicle_details" class="form-label">Vehicle</label>
                                 <input
@@ -136,7 +134,7 @@
                                     class="form-control"
                                     id="actual_departure_datetime"
                                     name="actual_departure_datetime"
-                                    value="{{ old('actual_departure_datetime', $ticket->actual_departure_datetime?->format('Y-m-d\TH:i')) }}">
+                                    value="{{ old('actual_departure_datetime', ($ticket->actual_departure_datetime ?: $ticket->requested_start_datetime)?->format('Y-m-d\TH:i')) }}">
                             </div>
                             <div class="mb-3">
                                 <label for="actual_return_datetime" class="form-label">Actual Return</label>
@@ -145,7 +143,7 @@
                                     class="form-control"
                                     id="actual_return_datetime"
                                     name="actual_return_datetime"
-                                    value="{{ old('actual_return_datetime', $ticket->actual_return_datetime?->format('Y-m-d\TH:i')) }}">
+                                    value="{{ old('actual_return_datetime', ($ticket->actual_return_datetime ?: $ticket->requested_end_datetime)?->format('Y-m-d\TH:i')) }}">
                             </div>
                             <div class="mb-3">
                                 <label for="encoder_remarks" class="form-label">Encoder Remarks</label>

@@ -215,6 +215,10 @@
                     <div class="field-label">Destination</div>
                     <div class="field-value">{{ $ticket->destination }}</div>
                 </div>
+                <div>
+                    <div class="field-label">Road KM from Maramag</div>
+                    <div class="field-value">{{ $ticket->distance_km !== null ? number_format($ticket->distance_km, 2) . ' km' : 'N/A' }}</div>
+                </div>
             </div>
         </section>
 

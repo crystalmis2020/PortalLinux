@@ -27,6 +27,8 @@ class TripTicket extends Model
         'section_id',
         'purpose',
         'destination',
+        'trip_ticket_location_id',
+        'distance_km',
         'requested_start_datetime',
         'requested_end_datetime',
         'passengers',
@@ -47,6 +49,7 @@ class TripTicket extends Model
     ];
 
     protected $casts = [
+        'distance_km' => 'float',
         'requested_start_datetime' => 'datetime',
         'requested_end_datetime' => 'datetime',
         'actual_departure_datetime' => 'datetime',
@@ -67,6 +70,11 @@ class TripTicket extends Model
             self::STATUS_COMPLETED,
             self::STATUS_CANCELLED,
         ];
+    }
+
+    public function location(): BelongsTo
+    {
+        return $this->belongsTo(TripTicketLocation::class, 'trip_ticket_location_id');
     }
 
     public function requester(): BelongsTo

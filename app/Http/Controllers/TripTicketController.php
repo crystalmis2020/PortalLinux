@@ -8,6 +8,8 @@ use App\Models\Department;
 use App\Models\Section;
 use App\Models\TripTicket;
 use App\Models\TripTicketLog;
+use App\Models\TripTicketLocation;
+use App\Services\DistanceCalculationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -18,7 +20,7 @@ class TripTicketController extends Controller
         $user = $request->user();
 
         $ticketsQuery = TripTicket::query()
-            ->with(['requester:id,full_name', 'department:id,name', 'section:id,name', 'vehicle:id,plate_number,description', 'driver:id,name'])
+            ->with(['requester:id,full_name', 'department:id,name', 'section:id,name', 'vehicle:id,plate_number,description', 'driver:id,name', 'location:id,destination'])
             ->latest()
             ->latest('id');
 
@@ -55,21 +57,89 @@ class TripTicketController extends Controller
             'departments' => Department::query()->orderBy('name')->get(),
             'sections' => Section::query()->with('department')->orderBy('name')->get(),
             'requester' => $request->user()->loadMissing(['department', 'section']),
+            'destinationLocations' => TripTicketLocation::locationTree(),
+            'selectedDestinationRegion' => null,
+            'selectedDestinationProvince' => null,
+            'selectedDestinationCity' => null,
         ]);
     }
 
-    public function store(StoreTripTicketRequest $request)
+
+    public function edit(Request $request, TripTicket $tripTicket)
+    {
+        $this->ensureCanEdit($request, $tripTicket);
+
+        $tripTicket->loadMissing(['requester.department', 'requester.section', 'location']);
+        $selection = $this->destinationSelection($tripTicket);
+
+        return view('trip-tickets.edit', [
+            'ticket' => $tripTicket,
+            'departments' => Department::query()->orderBy('name')->get(),
+            'sections' => Section::query()->with('department')->orderBy('name')->get(),
+            'requester' => $tripTicket->requester?->loadMissing(['department', 'section']) ?: $request->user()->loadMissing(['department', 'section']),
+            'destinationLocations' => TripTicketLocation::locationTree(),
+            'selectedDestinationRegion' => $selection['region'],
+            'selectedDestinationProvince' => $selection['province'],
+            'selectedDestinationCity' => $selection['city'],
+        ]);
+    }
+
+    public function update(StoreTripTicketRequest $request, TripTicket $tripTicket, DistanceCalculationService $distanceCalculator)
+    {
+        $this->ensureCanEdit($request, $tripTicket);
+
+        $user = $request->user();
+        $payload = $request->validated();
+        $location = TripTicketLocation::find($payload['trip_ticket_location_id']);
+        $distanceKm = $location ? $distanceCalculator->distanceForLocation($location) : null;
+        $distanceKm ??= (float) $payload['distance_km'];
+
+        DB::transaction(function () use ($payload, $user, $tripTicket, $distanceKm): void {
+            $tripTicket->update([
+                'department_id' => $tripTicket->department_id ?: ($payload['department_id'] ?? null),
+                'section_id' => $tripTicket->section_id ?: ($payload['section_id'] ?? null),
+                'purpose' => $payload['purpose'],
+                'destination' => $payload['destination'],
+                'trip_ticket_location_id' => $payload['trip_ticket_location_id'],
+                'distance_km' => $distanceKm,
+                'requested_start_datetime' => $payload['requested_start_datetime'],
+                'requested_end_datetime' => $payload['requested_end_datetime'],
+                'passengers' => $payload['passengers'] ?? null,
+                'contact_number' => $payload['contact_number'] ?? null,
+                'remarks' => $payload['remarks'] ?? null,
+            ]);
+
+            TripTicketLog::create([
+                'trip_ticket_id' => $tripTicket->id,
+                'user_id' => $user->id,
+                'action' => 'request_updated',
+                'to_status' => $tripTicket->status,
+                'remarks' => 'Trip ticket request details updated.',
+            ]);
+        });
+
+        return redirect()
+            ->route('trip-tickets.show', $tripTicket)
+            ->with('success', 'Trip ticket request updated successfully.');
+    }
+
+    public function store(StoreTripTicketRequest $request, DistanceCalculationService $distanceCalculator)
     {
         $user = $request->user();
         $payload = $request->validated();
+        $location = TripTicketLocation::find($payload['trip_ticket_location_id']);
+        $distanceKm = $location ? $distanceCalculator->distanceForLocation($location) : null;
+        $distanceKm ??= (float) $payload['distance_km'];
 
-        $ticket = DB::transaction(function () use ($payload, $user): TripTicket {
+        $ticket = DB::transaction(function () use ($payload, $user, $distanceKm): TripTicket {
             $ticket = TripTicket::create([
                 'requested_by' => $user->id,
                 'department_id' => $user->department_id ?: ($payload['department_id'] ?? null),
                 'section_id' => $user->section_id ?: ($payload['section_id'] ?? null),
                 'purpose' => $payload['purpose'],
                 'destination' => $payload['destination'],
+                'trip_ticket_location_id' => $payload['trip_ticket_location_id'],
+                'distance_km' => $distanceKm,
                 'requested_start_datetime' => $payload['requested_start_datetime'],
                 'requested_end_datetime' => $payload['requested_end_datetime'],
                 'passengers' => $payload['passengers'] ?? null,
@@ -112,6 +182,7 @@ class TripTicketController extends Controller
         return view('trip-tickets.show', [
             'ticket' => $tripTicket,
             'canEncodeDetails' => $this->canEncodeDetails($request, $tripTicket),
+            'canEditRequest' => $this->canEditRequest($request, $tripTicket),
         ]);
     }
 
@@ -187,6 +258,35 @@ class TripTicketController extends Controller
         return redirect()
             ->route('trip-tickets.show', $tripTicket)
             ->with('success', 'Trip ticket details encoded and submitted for approval.');
+    }
+
+
+    protected function ensureCanEdit(Request $request, TripTicket $tripTicket): void
+    {
+        abort_unless($this->canEditRequest($request, $tripTicket), 403);
+    }
+
+    protected function canEditRequest(Request $request, TripTicket $tripTicket): bool
+    {
+        $user = $request->user();
+
+        return (bool) ($user?->canManageTripTickets()
+            || (
+                (int) $tripTicket->requested_by === (int) $user?->id
+                && in_array($tripTicket->status, [
+                    TripTicket::STATUS_PENDING_DETAILS,
+                    TripTicket::STATUS_RETURNED,
+                ], true)
+            ));
+    }
+
+    protected function destinationSelection(TripTicket $tripTicket): array
+    {
+        return [
+            'region' => $tripTicket->location?->region_name,
+            'province' => $tripTicket->location?->province_name,
+            'city' => $tripTicket->location?->city_municipality_name,
+        ];
     }
 
     protected function ensureCanView(Request $request, TripTicket $tripTicket): void

@@ -49,9 +49,19 @@
                 <h5 class="mb-1">Trip Ticket Requests</h5>
                 <p class="text-muted small mb-0">Submit and track travel requests.</p>
             </div>
-            <a href="{{ route('trip-tickets.create') }}" class="btn btn-primary">
-                <i class="bx bx-plus me-1"></i>New Request
-            </a>
+            <div class="d-flex flex-wrap gap-2">
+                @if (auth()->user()?->canEncodeTripTickets())
+                    <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#driverCrudModal">
+                        <i class="bx bx-user me-1"></i>Manage Drivers
+                    </button>
+                    <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#vehicleCrudModal">
+                        <i class="bx bx-car me-1"></i>Manage Vehicles
+                    </button>
+                @endif
+                <a href="{{ route('trip-tickets.create') }}" class="btn btn-primary">
+                    <i class="bx bx-plus me-1"></i>New Request
+                </a>
+            </div>
         </div>
         <div class="card-body">
             <form class="row g-2 align-items-end mb-3" method="GET" action="{{ route('trip-tickets.index') }}">
@@ -117,4 +127,8 @@
             {{ $tickets->links() }}
         </div>
     </div>
+
+    @if (auth()->user()?->canEncodeTripTickets())
+        @include('trip-tickets.partials.dispatcher-crud-modals')
+    @endif
 @endsection

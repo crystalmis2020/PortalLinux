@@ -17,7 +17,9 @@ use App\Http\Controllers\InventoryItemController;
 use App\Http\Controllers\MessengerController;
 use App\Http\Controllers\InternetAccessRequestController;
 use App\Http\Controllers\TripTicketController;
+use App\Http\Controllers\TripTicketDriverController;
 use App\Http\Controllers\TripTicketLocationController;
+use App\Http\Controllers\TripTicketVehicleController;
 
 
 use App\Http\Controllers\ReportsBackTransferController;
@@ -123,6 +125,16 @@ Route::middleware(['auth'])->prefix('trip-tickets/locations')->name('trip-ticket
 
 Route::middleware(['auth'])->prefix('trip-tickets')->name('trip-tickets.')->controller(TripTicketController::class)->group(function () {
     Route::get('/', 'index')->name('index');
+    Route::get('/drivers', [TripTicketDriverController::class, 'index'])->name('drivers.index');
+    Route::post('/drivers', [TripTicketDriverController::class, 'store'])->name('drivers.store');
+    Route::get('/drivers/{driver}/edit', [TripTicketDriverController::class, 'edit'])->name('drivers.edit');
+    Route::put('/drivers/{driver}', [TripTicketDriverController::class, 'update'])->name('drivers.update');
+    Route::delete('/drivers/{driver}', [TripTicketDriverController::class, 'destroy'])->name('drivers.destroy');
+    Route::get('/vehicles', [TripTicketVehicleController::class, 'index'])->name('vehicles.index');
+    Route::post('/vehicles', [TripTicketVehicleController::class, 'store'])->name('vehicles.store');
+    Route::get('/vehicles/{vehicle}/edit', [TripTicketVehicleController::class, 'edit'])->name('vehicles.edit');
+    Route::put('/vehicles/{vehicle}', [TripTicketVehicleController::class, 'update'])->name('vehicles.update');
+    Route::delete('/vehicles/{vehicle}', [TripTicketVehicleController::class, 'destroy'])->name('vehicles.destroy');
     Route::get('/create', 'create')->name('create');
     Route::post('/', 'store')->name('store');
     Route::get('/{tripTicket}/edit', 'edit')->name('edit');

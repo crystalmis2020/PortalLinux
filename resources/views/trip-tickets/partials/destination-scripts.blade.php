@@ -4,10 +4,16 @@
         const oldRegion = @json(old('destination_region', $selectedDestinationRegion ?? null));
         const oldProvince = @json(old('destination_province', $selectedDestinationProvince ?? null));
         const oldCity = @json(old('destination_city', $selectedDestinationCity ?? null));
+        const oldDestinationMode = @json(old('destination_mode', isset($ticket) && ! $ticket->trip_ticket_location_id ? 'local_maramag' : 'mindanao'));
         const oldDistance = @json(old('distance_km_display', isset($ticket) && $ticket->distance_km !== null ? number_format($ticket->distance_km, 2) : null));
         const oldDistanceValue = @json(old('distance_km', $ticket->distance_km ?? null));
         const distanceUrlTemplate = @json(route('trip-tickets.locations.distance', ['tripTicketLocation' => '__LOCATION_ID__']));
 
+        const destinationModeSelect = document.getElementById('destination_mode');
+        const localDestinationGroup = document.getElementById('local_destination_group');
+        const localDestinationInput = document.getElementById('local_destination');
+        const mindanaoGroups = document.querySelectorAll('.destination-mindanao-group');
+        const distanceGroups = document.querySelectorAll('.destination-distance-group');
         const regionSelect = document.getElementById('destination_region');
         const provinceSelect = document.getElementById('destination_province');
         const citySelect = document.getElementById('destination_city');
@@ -17,7 +23,7 @@
         const distanceInput = document.getElementById('distance_km');
         const roundTripDistanceDisplayInput = document.getElementById('round_trip_distance_km_display');
 
-        if (!regionSelect || !provinceSelect || !citySelect || !destinationInput || !locationIdInput || !distanceDisplayInput || !distanceInput || !roundTripDistanceDisplayInput) {
+        if (!destinationModeSelect || !localDestinationGroup || !localDestinationInput || !regionSelect || !provinceSelect || !citySelect || !destinationInput || !locationIdInput || !distanceDisplayInput || !distanceInput || !roundTripDistanceDisplayInput) {
             return;
         }
 
@@ -64,7 +70,41 @@
             roundTripDistanceDisplayInput.value = Number.isFinite(numericValue) ? (numericValue * 2).toFixed(2) : '';
         }
 
+        function isLocalMaramag() {
+            return destinationModeSelect.value === 'local_maramag';
+        }
+
+        function syncDestinationMode() {
+            const localMode = isLocalMaramag();
+
+            localDestinationGroup.classList.toggle('d-none', !localMode);
+            mindanaoGroups.forEach(function (group) {
+                group.classList.toggle('d-none', localMode);
+            });
+            distanceGroups.forEach(function (group) {
+                group.classList.toggle('d-none', localMode);
+            });
+            localDestinationInput.required = localMode;
+            regionSelect.required = !localMode;
+            provinceSelect.required = !localMode;
+            citySelect.required = !localMode;
+            regionSelect.disabled = localMode;
+            provinceSelect.disabled = localMode || !regionSelect.value;
+            citySelect.disabled = localMode || !provinceSelect.value;
+
+            $('.trip-ticket-select').trigger('change.select2');
+            syncDestination();
+        }
+
         function syncDestination() {
+            if (isLocalMaramag()) {
+                const localDestination = localDestinationInput.value.trim();
+                destinationInput.value = localDestination ? `${localDestination}, Maramag, Bukidnon, Philippines` : '';
+                locationIdInput.value = '';
+                setDistance('0');
+                return;
+            }
+
             if (regionSelect.value && provinceSelect.value && citySelect.value) {
                 const selectedOption = citySelect.options[citySelect.selectedIndex];
                 const cachedDistance = selectedOption?.dataset.distanceKm || '';
@@ -138,7 +178,8 @@
             setDistance(oldDistanceValue || oldDistance);
         }
 
-        syncDestination();
+        destinationModeSelect.value = oldDestinationMode || 'mindanao';
+        syncDestinationMode();
 
         $(regionSelect).on('change', function () {
             resetSelect(provinceSelect, 'Select province');
@@ -162,5 +203,7 @@
         });
 
         $(citySelect).on('change', syncDestination);
+        destinationModeSelect.addEventListener('change', syncDestinationMode);
+        localDestinationInput.addEventListener('input', syncDestination);
     });
 </script>

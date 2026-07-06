@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreTripTicketRequest;
 use App\Http\Requests\EncodeTripTicketRequest;
 use App\Models\Department;
+use App\Models\Driver;
 use App\Models\Section;
+use App\Models\Vehicle;
 use App\Models\TripTicket;
 use App\Models\TripTicketLog;
 use App\Models\TripTicketLocation;
@@ -48,6 +50,12 @@ class TripTicketController extends Controller
             'tickets' => $tickets,
             'statuses' => TripTicket::statuses(),
             'selectedStatus' => $request->string('status')->toString(),
+            'dispatcherDrivers' => $user->canEncodeTripTickets()
+                ? Driver::query()->orderBy('name')->get()
+                : collect(),
+            'dispatcherVehicles' => $user->canEncodeTripTickets()
+                ? Vehicle::query()->orderBy('description')->orderBy('plate_number')->get()
+                : collect(),
         ]);
     }
 
@@ -90,7 +98,9 @@ class TripTicketController extends Controller
 
         $user = $request->user();
         $payload = $request->validated();
-        $location = TripTicketLocation::find($payload['trip_ticket_location_id']);
+        $location = ! empty($payload['trip_ticket_location_id'])
+            ? TripTicketLocation::find($payload['trip_ticket_location_id'])
+            : null;
         $distanceKm = $location ? $distanceCalculator->distanceForLocation($location) : null;
         $distanceKm ??= (float) $payload['distance_km'];
 
@@ -100,7 +110,7 @@ class TripTicketController extends Controller
                 'section_id' => $tripTicket->section_id ?: ($payload['section_id'] ?? null),
                 'purpose' => $payload['purpose'],
                 'destination' => $payload['destination'],
-                'trip_ticket_location_id' => $payload['trip_ticket_location_id'],
+                'trip_ticket_location_id' => $payload['trip_ticket_location_id'] ?? null,
                 'distance_km' => $distanceKm,
                 'requested_start_datetime' => $payload['requested_start_datetime'],
                 'requested_end_datetime' => $payload['requested_end_datetime'],
@@ -127,7 +137,9 @@ class TripTicketController extends Controller
     {
         $user = $request->user();
         $payload = $request->validated();
-        $location = TripTicketLocation::find($payload['trip_ticket_location_id']);
+        $location = ! empty($payload['trip_ticket_location_id'])
+            ? TripTicketLocation::find($payload['trip_ticket_location_id'])
+            : null;
         $distanceKm = $location ? $distanceCalculator->distanceForLocation($location) : null;
         $distanceKm ??= (float) $payload['distance_km'];
 
@@ -138,7 +150,7 @@ class TripTicketController extends Controller
                 'section_id' => $user->section_id ?: ($payload['section_id'] ?? null),
                 'purpose' => $payload['purpose'],
                 'destination' => $payload['destination'],
-                'trip_ticket_location_id' => $payload['trip_ticket_location_id'],
+                'trip_ticket_location_id' => $payload['trip_ticket_location_id'] ?? null,
                 'distance_km' => $distanceKm,
                 'requested_start_datetime' => $payload['requested_start_datetime'],
                 'requested_end_datetime' => $payload['requested_end_datetime'],
@@ -179,10 +191,18 @@ class TripTicketController extends Controller
             'logs.user:id,full_name',
         ]);
 
+        $canEncodeDetails = $this->canEncodeDetails($request, $tripTicket);
+
         return view('trip-tickets.show', [
             'ticket' => $tripTicket,
-            'canEncodeDetails' => $this->canEncodeDetails($request, $tripTicket),
+            'canEncodeDetails' => $canEncodeDetails,
             'canEditRequest' => $this->canEditRequest($request, $tripTicket),
+            'dispatcherDrivers' => $canEncodeDetails
+                ? Driver::query()->where('is_active', true)->orderBy('name')->get()
+                : collect(),
+            'dispatcherVehicles' => $canEncodeDetails
+                ? Vehicle::query()->where('is_available', true)->orderBy('description')->orderBy('plate_number')->get()
+                : collect(),
         ]);
     }
 
@@ -220,6 +240,10 @@ class TripTicketController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            $vehicle = Vehicle::query()->findOrFail($payload['vehicle_id']);
+            $driver = Driver::query()->findOrFail($payload['driver_id']);
+            $vehicleDetails = trim($vehicle->plate_number . ' - ' . $vehicle->description, ' -');
+
             $fromStatus = $ticket->status;
             $ticketNumber = $payload['ticket_number'] ?? null;
 
@@ -229,10 +253,10 @@ class TripTicketController extends Controller
 
             $ticket->update([
                 'ticket_number' => $ticketNumber ?: $ticket->ticket_number,
-                'vehicle_id' => null,
-                'vehicle_details' => $payload['vehicle_details'],
-                'driver_id' => null,
-                'driver_name' => $payload['driver_name'],
+                'vehicle_id' => $vehicle->id,
+                'vehicle_details' => $vehicleDetails,
+                'driver_id' => $driver->id,
+                'driver_name' => $driver->name,
                 'actual_departure_datetime' => $payload['actual_departure_datetime'] ?? null,
                 'actual_return_datetime' => $payload['actual_return_datetime'] ?? null,
                 'encoded_by' => $user->id,
@@ -249,8 +273,10 @@ class TripTicketController extends Controller
                 'to_status' => TripTicket::STATUS_FOR_APPROVAL,
                 'remarks' => 'Trip ticket details encoded and submitted for approval.',
                 'metadata' => [
-                    'vehicle_details' => $payload['vehicle_details'],
-                    'driver_name' => $payload['driver_name'],
+                    'vehicle_id' => $vehicle->id,
+                    'vehicle_details' => $vehicleDetails,
+                    'driver_id' => $driver->id,
+                    'driver_name' => $driver->name,
                 ],
             ]);
         });

@@ -3,7 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\Department;
+use App\Models\Driver;
 use App\Models\Section;
+use App\Models\Vehicle;
 use App\Models\TripTicket;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -30,7 +32,8 @@ class TripTicketWorkflowTest extends TestCase
 
         $createResponse = $this->actingAs($requester)->post('/trip-tickets', [
             'purpose' => 'Official business meeting',
-            'destination' => 'Main Office',
+            'destination_mode' => 'local_maramag',
+            'local_destination' => 'Main Office',
             'requested_start_datetime' => now()->addDay()->format('Y-m-d H:i:s'),
             'requested_end_datetime' => now()->addDay()->addHours(2)->format('Y-m-d H:i:s'),
             'passengers' => 'Requester One',
@@ -42,11 +45,24 @@ class TripTicketWorkflowTest extends TestCase
 
         $createResponse->assertRedirect('/trip-tickets/' . $ticket->id);
         $this->assertSame(TripTicket::STATUS_PENDING_DETAILS, $ticket->status);
+        $this->assertSame('Main Office, Maramag, Bukidnon, Philippines', $ticket->destination);
+        $this->assertNull($ticket->trip_ticket_location_id);
+        $this->assertSame(0.0, $ticket->distance_km);
+
+        $vehicle = Vehicle::create([
+            'description' => 'Test Vehicle',
+            'plate_number' => 'ABC-123',
+            'is_available' => true,
+        ]);
+        $driver = Driver::create([
+            'name' => 'Test Driver',
+            'is_active' => true,
+        ]);
 
         $this->actingAs($encoder)
             ->post('/trip-tickets/' . $ticket->id . '/encode', [
-                'vehicle_details' => 'Test Vehicle ABC-123',
-                'driver_name' => 'Test Driver',
+                'vehicle_id' => $vehicle->id,
+                'driver_id' => $driver->id,
                 'actual_departure_datetime' => now()->addDay()->format('Y-m-d H:i:s'),
                 'actual_return_datetime' => now()->addDay()->addHours(2)->format('Y-m-d H:i:s'),
                 'remarks' => 'Encoded from feature test',
@@ -55,7 +71,9 @@ class TripTicketWorkflowTest extends TestCase
 
         $ticket->refresh();
         $this->assertSame(TripTicket::STATUS_FOR_APPROVAL, $ticket->status);
-        $this->assertSame('Test Vehicle ABC-123', $ticket->vehicle_details);
+        $this->assertSame($vehicle->id, $ticket->vehicle_id);
+        $this->assertSame('ABC-123 - Test Vehicle', $ticket->vehicle_details);
+        $this->assertSame($driver->id, $ticket->driver_id);
         $this->assertSame('Test Driver', $ticket->driver_name);
 
         Sanctum::actingAs($approver);
@@ -100,7 +118,7 @@ class TripTicketWorkflowTest extends TestCase
             ->assertOk()
             ->assertSee('Trip Ticket')
             ->assertSee('Approved')
-            ->assertSee('Test Vehicle ABC-123')
+            ->assertSee('ABC-123 - Test Vehicle')
             ->assertSee('Test Driver');
 
         $this->assertSame(3, $ticket->logs()->count());
@@ -148,6 +166,104 @@ class TripTicketWorkflowTest extends TestCase
         $this->postJson('/api/trip-tickets/' . $ticket->id . '/approve', [
             'approval_remarks' => 'Should fail',
         ])->assertForbidden();
+    }
+
+    public function test_dispatcher_can_manage_trip_ticket_drivers(): void
+    {
+        [, $dispatcher] = $this->tripTicketUsers();
+
+        $this->actingAs($dispatcher)
+            ->get('/trip-tickets')
+            ->assertOk()
+            ->assertSee('Manage Drivers')
+            ->assertSee('Manage Vehicles');
+
+        $this->actingAs($dispatcher)
+            ->post('/trip-tickets/drivers', [
+                'name' => 'CRUD Test Driver',
+            ])
+            ->assertRedirect('/trip-tickets');
+
+        $driver = Driver::query()->where('name', 'CRUD Test Driver')->firstOrFail();
+
+        $this->actingAs($dispatcher)
+            ->get('/trip-tickets')
+            ->assertOk()
+            ->assertSee('CRUD Test Driver');
+
+        $this->actingAs($dispatcher)
+            ->put('/trip-tickets/drivers/' . $driver->id, [
+                'name' => 'Updated CRUD Test Driver',
+            ])
+            ->assertRedirect('/trip-tickets');
+
+        $this->assertDatabaseHas('drivers', [
+            'id' => $driver->id,
+            'name' => 'Updated CRUD Test Driver',
+        ]);
+
+        $this->actingAs($dispatcher)
+            ->delete('/trip-tickets/drivers/' . $driver->id)
+            ->assertRedirect('/trip-tickets');
+
+        $this->assertDatabaseMissing('drivers', [
+            'id' => $driver->id,
+        ]);
+    }
+
+    public function test_dispatcher_can_manage_trip_ticket_vehicles(): void
+    {
+        [, $dispatcher] = $this->tripTicketUsers();
+
+        $this->actingAs($dispatcher)
+            ->post('/trip-tickets/vehicles', [
+                'description' => 'CRUD Test Model',
+                'plate_number' => 'CRUD-123',
+            ])
+            ->assertRedirect('/trip-tickets');
+
+        $vehicle = Vehicle::query()->where('plate_number', 'CRUD-123')->firstOrFail();
+        TripTicket::query()->where('vehicle_id', $vehicle->id)->update(['vehicle_id' => null]);
+
+        $this->actingAs($dispatcher)
+            ->get('/trip-tickets')
+            ->assertOk()
+            ->assertSee('CRUD Test Model')
+            ->assertSee('CRUD-123');
+
+        $this->actingAs($dispatcher)
+            ->put('/trip-tickets/vehicles/' . $vehicle->id, [
+                'description' => 'Updated CRUD Test Model',
+                'plate_number' => 'CRUD-456',
+            ])
+            ->assertRedirect('/trip-tickets');
+
+        $this->assertDatabaseHas('vehicles', [
+            'id' => $vehicle->id,
+            'description' => 'Updated CRUD Test Model',
+            'plate_number' => 'CRUD-456',
+        ]);
+
+        $this->actingAs($dispatcher)
+            ->delete('/trip-tickets/vehicles/' . $vehicle->id)
+            ->assertRedirect('/trip-tickets');
+
+        $this->assertDatabaseMissing('vehicles', [
+            'id' => $vehicle->id,
+        ]);
+    }
+
+    public function test_regular_user_cannot_manage_trip_ticket_drivers_or_vehicles(): void
+    {
+        [$requester] = $this->tripTicketUsers();
+
+        $this->actingAs($requester)
+            ->get('/trip-tickets/drivers')
+            ->assertForbidden();
+
+        $this->actingAs($requester)
+            ->get('/trip-tickets/vehicles')
+            ->assertForbidden();
     }
 
     public function test_mobile_login_returns_token_and_trip_ticket_permissions(): void

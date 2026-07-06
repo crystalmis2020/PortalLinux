@@ -108,24 +108,26 @@
                         <form method="POST" action="{{ route('trip-tickets.encode', $ticket) }}">
                             @csrf
                             <div class="mb-3">
-                                <label for="vehicle_details" class="form-label">Vehicle</label>
-                                <input
-                                    type="text"
-                                    class="form-control"
-                                    id="vehicle_details"
-                                    name="vehicle_details"
-                                    value="{{ old('vehicle_details', $ticket->vehicle_details ?: ($ticket->vehicle ? ($ticket->vehicle->plate_number . ' - ' . $ticket->vehicle->description) : '')) }}"
-                                    required>
+                                <label for="vehicle_id" class="form-label">Vehicle</label>
+                                <select class="form-select" id="vehicle_id" name="vehicle_id" required>
+                                    <option value="">Select vehicle</option>
+                                    @foreach ($dispatcherVehicles as $vehicle)
+                                        <option value="{{ $vehicle->id }}" {{ (string) old('vehicle_id', $ticket->vehicle_id) === (string) $vehicle->id ? 'selected' : '' }}>
+                                            {{ $vehicle->plate_number }} - {{ $vehicle->description }}
+                                        </option>
+                                    @endforeach
+                                </select>
                             </div>
                             <div class="mb-3">
-                                <label for="driver_name" class="form-label">Driver</label>
-                                <input
-                                    type="text"
-                                    class="form-control"
-                                    id="driver_name"
-                                    name="driver_name"
-                                    value="{{ old('driver_name', $ticket->driver_name ?: $ticket->driver?->name) }}"
-                                    required>
+                                <label for="driver_id" class="form-label">Driver</label>
+                                <select class="form-select" id="driver_id" name="driver_id" required>
+                                    <option value="">Select driver</option>
+                                    @foreach ($dispatcherDrivers as $driver)
+                                        <option value="{{ $driver->id }}" {{ (string) old('driver_id', $ticket->driver_id) === (string) $driver->id ? 'selected' : '' }}>
+                                            {{ $driver->name }}
+                                        </option>
+                                    @endforeach
+                                </select>
                             </div>
                             <div class="mb-3">
                                 <label for="actual_departure_datetime" class="form-label">Actual Departure</label>

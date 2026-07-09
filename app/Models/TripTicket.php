@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
 
 class TripTicket extends Model
 {
@@ -40,6 +41,13 @@ class TripTicket extends Model
         'driver_name',
         'actual_departure_datetime',
         'actual_return_datetime',
+        'departure_recorded_by',
+        'departure_recorded_at',
+        'return_recorded_by',
+        'return_recorded_at',
+        'gatekeeper_departure_remarks',
+        'gatekeeper_return_remarks',
+        'qr_token',
         'encoded_by',
         'encoded_at',
         'approved_by',
@@ -54,9 +62,29 @@ class TripTicket extends Model
         'requested_end_datetime' => 'datetime',
         'actual_departure_datetime' => 'datetime',
         'actual_return_datetime' => 'datetime',
+        'departure_recorded_at' => 'datetime',
+        'return_recorded_at' => 'datetime',
         'encoded_at' => 'datetime',
         'approved_at' => 'datetime',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (TripTicket $tripTicket): void {
+            if (!$tripTicket->qr_token) {
+                $tripTicket->qr_token = self::generateQrToken();
+            }
+        });
+    }
+
+    public static function generateQrToken(): string
+    {
+        do {
+            $token = Str::lower(Str::random(20));
+        } while (self::where('qr_token', $token)->exists());
+
+        return $token;
+    }
 
     public static function statuses(): array
     {
@@ -100,6 +128,16 @@ class TripTicket extends Model
     public function driver(): BelongsTo
     {
         return $this->belongsTo(Driver::class, 'driver_id');
+    }
+
+    public function departureRecorder(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'departure_recorded_by');
+    }
+
+    public function returnRecorder(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'return_recorded_by');
     }
 
     public function encoder(): BelongsTo

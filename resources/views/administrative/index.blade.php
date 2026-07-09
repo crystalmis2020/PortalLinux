@@ -71,7 +71,10 @@
                                         @if ($user->can_approve_trip_tickets)
                                             <span class="badge bg-success">Approver</span>
                                         @endif
-                                        @if (!$user->can_encode_trip_tickets && !$user->can_approve_trip_tickets)
+                                        @if ($user->can_gatekeep_trip_tickets)
+                                            <span class="badge bg-warning text-dark">Gatekeeper</span>
+                                        @endif
+                                        @if (!$user->can_encode_trip_tickets && !$user->can_approve_trip_tickets && !$user->can_gatekeep_trip_tickets)
                                             <span class="badge bg-secondary">Requester</span>
                                         @endif
                                     @endif
@@ -193,7 +196,11 @@
                                 <input class="form-check-input" type="checkbox" value="1" id="can_manage_trip_tickets" name="can_manage_trip_tickets">
                                 <label class="form-check-label" for="can_manage_trip_tickets">Manager</label>
                             </div>
-                            <small class="text-muted d-block mt-2">All users can request trip tickets. These options add encoder, approver, or manager access.</small>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="1" id="can_gatekeep_trip_tickets" name="can_gatekeep_trip_tickets">
+                                <label class="form-check-label" for="can_gatekeep_trip_tickets">Gatekeeper</label>
+                            </div>
+                            <small class="text-muted d-block mt-2">All users can request trip tickets. These options add encoder, approver, manager, or gatekeeper access.</small>
                         </div>
                     </div>
                 </div>

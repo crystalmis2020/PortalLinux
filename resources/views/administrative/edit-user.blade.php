@@ -200,7 +200,11 @@
                                 <input class="form-check-input" type="checkbox" value="1" id="can_manage_trip_tickets" name="can_manage_trip_tickets" {{ $user->can_manage_trip_tickets ? 'checked' : '' }}>
                                 <label class="form-check-label" for="can_manage_trip_tickets">Manager</label>
                             </div>
-                            <small class="text-muted d-block mt-2">All users can request trip tickets. These options add encoder, approver, or manager access.</small>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="1" id="can_gatekeep_trip_tickets" name="can_gatekeep_trip_tickets" {{ $user->can_gatekeep_trip_tickets ? 'checked' : '' }}>
+                                <label class="form-check-label" for="can_gatekeep_trip_tickets">Gatekeeper</label>
+                            </div>
+                            <small class="text-muted d-block mt-2">All users can request trip tickets. These options add encoder, approver, manager, or gatekeeper access.</small>
                         </div>
                     </div>
                 </div>

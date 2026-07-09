@@ -19,6 +19,15 @@ class TripTicket {
     this.departmentName,
     this.sectionName,
     this.encoderName,
+    this.vehiclePlateNumber,
+    this.gatekeeperDepartureRemarks,
+    this.gatekeeperReturnRemarks,
+    this.departureRecordedAt,
+    this.returnRecordedAt,
+    this.departureRecorderName,
+    this.returnRecorderName,
+    this.canRecordDeparture = false,
+    this.canRecordReturn = false,
   });
 
   final int id;
@@ -40,6 +49,15 @@ class TripTicket {
   final String? departmentName;
   final String? sectionName;
   final String? encoderName;
+  final String? vehiclePlateNumber;
+  final String? gatekeeperDepartureRemarks;
+  final String? gatekeeperReturnRemarks;
+  final DateTime? departureRecordedAt;
+  final DateTime? returnRecordedAt;
+  final String? departureRecorderName;
+  final String? returnRecorderName;
+  final bool canRecordDeparture;
+  final bool canRecordReturn;
 
   String get displayNumber => ticketNumber == null || ticketNumber!.isEmpty
       ? 'Request #$id'
@@ -66,6 +84,16 @@ class TripTicket {
       departmentName: _nestedName(json['department']),
       sectionName: _nestedName(json['section']),
       encoderName: _nestedName(json['encoder']),
+      vehiclePlateNumber: json['vehicle_plate_number'] as String?,
+      gatekeeperDepartureRemarks:
+          json['gatekeeper_departure_remarks'] as String?,
+      gatekeeperReturnRemarks: json['gatekeeper_return_remarks'] as String?,
+      departureRecordedAt: _date(json['departure_recorded_at']),
+      returnRecordedAt: _date(json['return_recorded_at']),
+      departureRecorderName: _nestedName(json['departure_recorder']),
+      returnRecorderName: _nestedName(json['return_recorder']),
+      canRecordDeparture: json['can_record_departure'] == true,
+      canRecordReturn: json['can_record_return'] == true,
     );
   }
 

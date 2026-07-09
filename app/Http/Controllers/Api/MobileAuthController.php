@@ -82,6 +82,7 @@ class MobileAuthController extends Controller
                 'can_encode_trip_tickets' => $user->canEncodeTripTickets(),
                 'can_approve_trip_tickets' => $user->canApproveTripTickets(),
                 'can_manage_trip_tickets' => $user->canManageTripTickets(),
+                'can_gatekeep_trip_tickets' => $user->canGatekeepTripTickets(),
                 'can_print_trip_tickets' => $user->canPrintTripTickets(),
             ],
         ];

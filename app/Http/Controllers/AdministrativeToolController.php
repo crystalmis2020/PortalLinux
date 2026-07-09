@@ -69,6 +69,7 @@ class AdministrativeToolController extends Controller
             'can_encode_trip_tickets' => 'nullable|boolean',
             'can_approve_trip_tickets' => 'nullable|boolean',
             'can_manage_trip_tickets' => 'nullable|boolean',
+            'can_gatekeep_trip_tickets' => 'nullable|boolean',
         ]);
 
         //dd(hash('sha256', $request->password));
@@ -85,6 +86,7 @@ class AdministrativeToolController extends Controller
             'can_encode_trip_tickets' => $request->boolean('can_encode_trip_tickets'),
             'can_approve_trip_tickets' => $request->boolean('can_approve_trip_tickets'),
             'can_manage_trip_tickets' => $request->boolean('can_manage_trip_tickets'),
+            'can_gatekeep_trip_tickets' => $request->boolean('can_gatekeep_trip_tickets'),
         ]);
 
         return response()->json([
@@ -141,6 +143,7 @@ class AdministrativeToolController extends Controller
                 'can_encode_trip_tickets' => 'nullable|boolean',
                 'can_approve_trip_tickets' => 'nullable|boolean',
                 'can_manage_trip_tickets' => 'nullable|boolean',
+                'can_gatekeep_trip_tickets' => 'nullable|boolean',
             ]);
 
             $user->update([
@@ -153,6 +156,7 @@ class AdministrativeToolController extends Controller
                 'can_encode_trip_tickets' => $request->boolean('can_encode_trip_tickets'),
                 'can_approve_trip_tickets' => $request->boolean('can_approve_trip_tickets'),
                 'can_manage_trip_tickets' => $request->boolean('can_manage_trip_tickets'),
+                'can_gatekeep_trip_tickets' => $request->boolean('can_gatekeep_trip_tickets'),
             ]);
 
             return response()->json(['success' => 'User updated successfully', 'user' => $user]);
@@ -286,6 +290,7 @@ class AdministrativeToolController extends Controller
         $access = array_filter([
             $user->can_encode_trip_tickets ? 'Encoder' : null,
             $user->can_approve_trip_tickets ? 'Approver' : null,
+            $user->can_gatekeep_trip_tickets ? 'Gatekeeper' : null,
         ]);
 
         return empty($access) ? 'Requester' : implode(', ', $access);

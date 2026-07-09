@@ -37,6 +37,7 @@ class User extends Authenticatable
         'can_encode_trip_tickets',
         'can_approve_trip_tickets',
         'can_manage_trip_tickets',
+        'can_gatekeep_trip_tickets',
         'is_login',
         'last_login',
         'last_seen_at',
@@ -67,6 +68,7 @@ class User extends Authenticatable
             'can_encode_trip_tickets' => 'boolean',
             'can_approve_trip_tickets' => 'boolean',
             'can_manage_trip_tickets' => 'boolean',
+            'can_gatekeep_trip_tickets' => 'boolean',
         ];
     }
 
@@ -152,6 +154,16 @@ class User extends Authenticatable
         return $this->hasMany(TripTicket::class, 'approved_by');
     }
 
+    public function recordedTripTicketDepartures(): HasMany
+    {
+        return $this->hasMany(TripTicket::class, 'departure_recorded_by');
+    }
+
+    public function recordedTripTicketReturns(): HasMany
+    {
+        return $this->hasMany(TripTicket::class, 'return_recorded_by');
+    }
+
     public function sentMessengerMessages(): HasMany
     {
         return $this->hasMany(MessengerMessage::class, 'sender_id');
@@ -193,6 +205,11 @@ class User extends Authenticatable
     public function canManageTripTickets(): bool
     {
         return $this->is_sudo || $this->can_manage_trip_tickets;
+    }
+
+    public function canGatekeepTripTickets(): bool
+    {
+        return $this->canManageTripTickets() || $this->can_gatekeep_trip_tickets;
     }
 
     public function canPrintTripTickets(): bool

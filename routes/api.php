@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\TripTicketApprovalController;
+use App\Http\Controllers\Api\TripTicketGatekeeperController;
 use App\Http\Controllers\Api\MobileAuthController;
 use App\Http\Controllers\TripTicketLocationController;
 use Illuminate\Support\Facades\Route;
@@ -18,6 +19,16 @@ Route::middleware(['auth:sanctum'])->prefix('trip-tickets/locations')->name('api
     Route::get('/provinces', 'provinces')->name('provinces');
     Route::get('/cities', 'cities')->name('cities');
     Route::get('/{tripTicketLocation}/distance', 'distance')->name('distance');
+});
+
+
+Route::middleware(['auth:sanctum'])->prefix('trip-tickets/gatekeeper')->name('api.trip-tickets.gatekeeper.')->controller(TripTicketGatekeeperController::class)->group(function () {
+    Route::get('/ready-for-departure', 'readyForDeparture')->name('ready-for-departure');
+    Route::get('/awaiting-return', 'awaitingReturn')->name('awaiting-return');
+    Route::get('/search', 'search')->name('search');
+    Route::get('/qr/{token}', 'qrLookup')->where('token', '.*')->name('qr');
+    Route::post('/{tripTicket}/departure', 'recordDeparture')->name('departure');
+    Route::post('/{tripTicket}/return', 'recordReturn')->name('return');
 });
 
 Route::middleware(['auth:sanctum'])->prefix('trip-tickets')->name('api.trip-tickets.')->controller(TripTicketApprovalController::class)->group(function () {

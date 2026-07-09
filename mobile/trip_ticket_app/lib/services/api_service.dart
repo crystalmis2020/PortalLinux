@@ -127,6 +127,79 @@ class ApiService {
     return TripTicket.fromJson(data['ticket'] as Map<String, dynamic>);
   }
 
+  Future<List<TripTicket>> gatekeeperReadyForDeparture() {
+    return _gatekeeperTickets(
+        '/api/trip-tickets/gatekeeper/ready-for-departure');
+  }
+
+  Future<List<TripTicket>> gatekeeperAwaitingReturn() {
+    return _gatekeeperTickets('/api/trip-tickets/gatekeeper/awaiting-return');
+  }
+
+  Future<List<TripTicket>> gatekeeperSearch(String query) {
+    return _gatekeeperTickets(
+      '/api/trip-tickets/gatekeeper/search',
+      query: query,
+    );
+  }
+
+  Future<TripTicket> gatekeeperQrLookup(String token) async {
+    final response = await _request(
+      _client.get(
+        _uri('/api/trip-tickets/gatekeeper/qr/${Uri.encodeComponent(token)}'),
+        headers: await _authHeaders(),
+      ),
+    );
+
+    final data = _decode(response);
+    return TripTicket.fromJson(data['ticket'] as Map<String, dynamic>);
+  }
+
+  Future<TripTicket> gatekeeperRecordDeparture(int id, String remarks) {
+    return _gatekeeperAction(id, 'departure', remarks);
+  }
+
+  Future<TripTicket> gatekeeperRecordReturn(int id, String remarks) {
+    return _gatekeeperAction(id, 'return', remarks);
+  }
+
+  Future<List<TripTicket>> _gatekeeperTickets(
+    String path, {
+    String? query,
+  }) async {
+    final response = await _request(
+      _client.get(
+        _uri(path, queryParameters: {
+          if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
+        }),
+        headers: await _authHeaders(),
+      ),
+    );
+
+    final data = _decode(response);
+    final rows = data['data'] as List<dynamic>;
+    return rows
+        .map((item) => TripTicket.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<TripTicket> _gatekeeperAction(
+    int id,
+    String action,
+    String remarks,
+  ) async {
+    final response = await _request(
+      _client.post(
+        _uri('/api/trip-tickets/gatekeeper/$id/$action'),
+        headers: await _authHeaders(),
+        body: jsonEncode({'remarks': remarks}),
+      ),
+    );
+
+    final data = _decode(response);
+    return TripTicket.fromJson(data['ticket'] as Map<String, dynamic>);
+  }
+
   Future<TripTicket> approve(int id, String remarks) {
     return _approvalAction(id, 'approve', remarks);
   }
@@ -172,8 +245,13 @@ class ApiService {
     };
   }
 
-  Uri _uri(String path) {
-    return Uri.parse('$baseUrl$path');
+  Uri _uri(String path, {Map<String, String>? queryParameters}) {
+    final uri = Uri.parse('$baseUrl$path');
+    if (queryParameters == null || queryParameters.isEmpty) {
+      return uri;
+    }
+
+    return uri.replace(queryParameters: queryParameters);
   }
 
   Future<http.Response> _request(Future<http.Response> request) async {
@@ -208,7 +286,8 @@ class ApiService {
       );
     }
 
-    final data = decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
+    final data =
+        decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException(

@@ -328,7 +328,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
 
   Widget _row(String label, String? value, {bool pending = false}) {
     final hasValue = value != null && value.trim().isNotEmpty;
-    final display = hasValue ? value! : (pending ? 'Pending' : 'N/A');
+    final display = hasValue ? value : (pending ? 'Pending' : 'N/A');
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
@@ -352,9 +352,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
             child: Text(
               display,
               style: TextStyle(
-                color: hasValue
-                    ? const Color(0xff334155)
-                    : PortalColors.muted,
+                color: hasValue ? const Color(0xff334155) : PortalColors.muted,
                 fontWeight: hasValue ? FontWeight.w600 : FontWeight.w500,
                 height: 1.35,
                 fontStyle: hasValue ? FontStyle.normal : FontStyle.italic,

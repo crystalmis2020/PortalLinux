@@ -5,6 +5,7 @@ import '../services/api_service.dart';
 import '../theme/portal_theme.dart';
 import '../widgets/portal_brand.dart';
 import 'approval_list_screen.dart';
+import 'gatekeeper_screen.dart';
 import 'messhall_screen.dart';
 
 class PortalShellScreen extends StatefulWidget {
@@ -28,6 +29,45 @@ class _PortalShellScreenState extends State<PortalShellScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final pages = <Widget>[
+      if (widget.session.canApproveTripTickets)
+        ApprovalListScreen(
+          api: widget.api,
+          session: widget.session,
+          onUnauthorized: widget.onLogout,
+        ),
+      if (widget.session.canGatekeepTripTickets)
+        GatekeeperScreen(
+          api: widget.api,
+          session: widget.session,
+          onUnauthorized: widget.onLogout,
+        ),
+      const MessHallScreen(),
+    ];
+
+    final destinations = <NavigationDestination>[
+      if (widget.session.canApproveTripTickets)
+        const NavigationDestination(
+          icon: Icon(Icons.fact_check_outlined),
+          selectedIcon: Icon(Icons.fact_check),
+          label: 'Approval',
+        ),
+      if (widget.session.canGatekeepTripTickets)
+        const NavigationDestination(
+          icon: Icon(Icons.local_shipping_outlined),
+          selectedIcon: Icon(Icons.local_shipping),
+          label: 'Gatekeeper',
+        ),
+      const NavigationDestination(
+        icon: Icon(Icons.restaurant_outlined),
+        selectedIcon: Icon(Icons.restaurant),
+        label: 'Mess Hall',
+      ),
+    ];
+
+    if (_selectedIndex >= pages.length) {
+      _selectedIndex = 0;
+    }
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 68,
@@ -98,32 +138,14 @@ class _PortalShellScreenState extends State<PortalShellScreen> {
       ),
       body: IndexedStack(
         index: _selectedIndex,
-        children: [
-          ApprovalListScreen(
-            api: widget.api,
-            session: widget.session,
-            onUnauthorized: widget.onLogout,
-          ),
-          const MessHallScreen(),
-        ],
+        children: pages,
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: (index) {
           setState(() => _selectedIndex = index);
         },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.confirmation_number_outlined),
-            selectedIcon: Icon(Icons.confirmation_number),
-            label: 'Trip Ticket',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.restaurant_outlined),
-            selectedIcon: Icon(Icons.restaurant),
-            label: 'Mess Hall',
-          ),
-        ],
+        destinations: destinations,
       ),
     );
   }

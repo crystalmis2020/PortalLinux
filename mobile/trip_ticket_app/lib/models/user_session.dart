@@ -4,6 +4,7 @@ class UserSession {
     required this.fullName,
     required this.username,
     required this.canApproveTripTickets,
+    required this.canGatekeepTripTickets,
     this.department,
     this.section,
   });
@@ -12,6 +13,8 @@ class UserSession {
   final String fullName;
   final String username;
   final bool canApproveTripTickets;
+  final bool canGatekeepTripTickets;
+  bool get canUseTripTickets => canApproveTripTickets || canGatekeepTripTickets;
   final String? department;
   final String? section;
 
@@ -23,6 +26,7 @@ class UserSession {
       fullName: (json['full_name'] ?? '') as String,
       username: (json['username'] ?? '') as String,
       canApproveTripTickets: permissions['can_approve_trip_tickets'] == true,
+      canGatekeepTripTickets: permissions['can_gatekeep_trip_tickets'] == true,
       department: json['department'] as String?,
       section: json['section'] as String?,
     );

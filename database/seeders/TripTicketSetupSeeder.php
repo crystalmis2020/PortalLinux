@@ -52,6 +52,16 @@ class TripTicketSetupSeeder extends Seeder
             permissions: ['can_approve_trip_tickets' => true],
             password: $defaultPassword
         );
+
+
+        $this->upsertTripTicketUser(
+            username: env('TRIP_TICKET_GATEKEEPER_USERNAME', 'trip_gatekeeper'),
+            fullName: env('TRIP_TICKET_GATEKEEPER_NAME', 'Trip Ticket Gatekeeper'),
+            departmentId: $department->id,
+            sectionId: $section->id,
+            permissions: ['can_gatekeep_trip_tickets' => true],
+            password: $defaultPassword
+        );
     }
 
     protected function upsertTripTicketUser(

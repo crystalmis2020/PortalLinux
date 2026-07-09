@@ -211,7 +211,9 @@ class _ApprovalListScreenState extends State<ApprovalListScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  _loading ? 'Checking requests...' : '${_tickets.length} pending',
+                  _loading
+                      ? 'Checking requests...'
+                      : '${_tickets.length} pending',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 20,
@@ -282,9 +284,7 @@ class _ApprovalListScreenState extends State<ApprovalListScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           sliver: SliverToBoxAdapter(
             child: _MessagePanel(
-              icon: _query.isEmpty
-                  ? Icons.task_alt
-                  : Icons.search_off_outlined,
+              icon: _query.isEmpty ? Icons.task_alt : Icons.search_off_outlined,
               title: _query.isEmpty ? 'Queue is clear' : 'No matching requests',
               message: _query.isEmpty
                   ? 'There are no trip tickets waiting for approval.'
@@ -395,8 +395,7 @@ class _ApprovalListScreenState extends State<ApprovalListScreen> {
           child: Text(
             text,
             style: TextStyle(
-              color:
-                  strong ? PortalColors.brandDark : const Color(0xff475569),
+              color: strong ? PortalColors.brandDark : const Color(0xff475569),
               fontWeight: strong ? FontWeight.w700 : FontWeight.w500,
               height: 1.35,
             ),

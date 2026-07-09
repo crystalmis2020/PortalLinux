@@ -50,14 +50,14 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _password.text,
       );
 
-      if (!session.canApproveTripTickets) {
+      if (!session.canUseTripTickets) {
         await widget.api.logout();
         if (!mounted) {
           return;
         }
 
         setState(() {
-          _error = 'This account is not allowed to approve trip tickets.';
+          _error = 'This account is not allowed to use mobile trip tickets.';
           _loading = false;
         });
         return;
@@ -119,7 +119,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           SizedBox(height: 10),
                           Text(
-                            'Review Trip Tickets now. Mess Hall follows next.',
+                            'Review approvals and record gate departures.',
                             style: TextStyle(
                               color: Color(0xffcbd5e1),
                               height: 1.45,
@@ -139,11 +139,12 @@ class _LoginScreenState extends State<LoginScreen> {
                             children: [
                               Text(
                                 'Sign in',
-                                style: Theme.of(context).textTheme.headlineSmall,
+                                style:
+                                    Theme.of(context).textTheme.headlineSmall,
                               ),
                               const SizedBox(height: 5),
                               const Text(
-                                'Use your Support Portal approver account.',
+                                'Use your Support Portal trip ticket account.',
                                 style: TextStyle(color: PortalColors.muted),
                               ),
                               const SizedBox(height: 24),

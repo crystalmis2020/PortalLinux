@@ -59,11 +59,15 @@ distribution outside that network, install a publicly trusted TLS certificate
 on the server, switch `API_BASE_URL` to HTTPS, and remove
 `android:usesCleartextTraffic="true"`.
 
-## Test Account
+## Test Accounts
 
-Create the development approver account with `TripTicketSetupSeeder`. Configure
-`TRIP_TICKET_APPROVER_USERNAME` and `TRIP_TICKET_DEFAULT_PASSWORD` in the
+Create the development approval and gatekeeper accounts with
+`TripTicketSetupSeeder`. Configure `TRIP_TICKET_APPROVER_USERNAME`,
+`TRIP_TICKET_GATEKEEPER_USERNAME`, and `TRIP_TICKET_DEFAULT_PASSWORD` in the
 Laravel `.env` file before running the seeder. Never commit the real password.
+
+The Gatekeeper mobile screen supports camera QR scanning and manual QR token
+entry as a fallback. Android camera permission is declared in the app manifest.
 
 ## Backend Endpoints Used
 
@@ -76,4 +80,10 @@ GET  /api/trip-tickets/{id}
 POST /api/trip-tickets/{id}/approve
 POST /api/trip-tickets/{id}/reject
 POST /api/trip-tickets/{id}/return
+GET  /api/trip-tickets/gatekeeper/ready-for-departure
+GET  /api/trip-tickets/gatekeeper/awaiting-return
+GET  /api/trip-tickets/gatekeeper/search?q={query}
+GET  /api/trip-tickets/gatekeeper/qr/{token}
+POST /api/trip-tickets/gatekeeper/{id}/departure
+POST /api/trip-tickets/gatekeeper/{id}/return
 ```

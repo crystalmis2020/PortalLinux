@@ -329,3 +329,60 @@ Before implementing the Gatekeeper and Driver Workload Advisory features, confir
 8. Whether workload calculation should use last 7 days, last 30 days, or both.
 9. Whether driver recommendations should exclude drivers with active departed trips.
 10. Whether kilometers should count one-way `distance_km` or round-trip distance.
+
+## Implementation Progress
+
+- [x] 2026-07-09: Database foundation added for Gatekeeper records.
+  - Added migration `database/migrations/2026_07_09_000001_add_gatekeeper_fields_to_trip_tickets_table.php`.
+  - Added `departure_recorded_by`, `departure_recorded_at`, `return_recorded_by`, `return_recorded_at`, `gatekeeper_departure_remarks`, `gatekeeper_return_remarks`, and `qr_token` to the planned schema.
+  - Updated `app/Models/TripTicket.php` fillable fields, date casts, and recorder relationships.
+  - Verified with PHP syntax checks and a Laravel migration dry run using `--pretend --force`.
+
+- [x] 2026-07-09: Gatekeeper permission foundation added.
+  - Added migration `database/migrations/2026_07_09_000002_add_gatekeeper_permission_to_users_table.php` for `users.can_gatekeep_trip_tickets`.
+  - Updated `app/Models/User.php` with fillable/cast support, `canGatekeepTripTickets()`, and Gatekeeper recorder relationships.
+  - Updated admin user create/edit screens and `AdministrativeToolController` so Gatekeeper access can be assigned.
+  - Updated `MobileAuthController` permissions payload with `can_gatekeep_trip_tickets`.
+  - Updated `TripTicketSetupSeeder` with an optional `trip_gatekeeper` setup user.
+  - Verified with PHP syntax checks and a Laravel migration dry run using `--pretend --force`.
+
+- [x] 2026-07-09: Gatekeeper read API endpoints added.
+  - Added `app/Http/Controllers/Api/TripTicketGatekeeperController.php` for daily Gatekeeper lookup flows.
+  - Added authenticated API routes under `api/trip-tickets/gatekeeper`: `ready-for-departure`, `awaiting-return`, `search`, and `qr/{token}`.
+  - Search supports ticket number, driver name, vehicle details, vehicle plate number, requester, and destination, scoped to the selected day so Gatekeeper can find vehicles scheduled for that day.
+  - Added automatic `qr_token` generation for new trip tickets in `app/Models/TripTicket.php`.
+  - Verified with PHP syntax checks and `php artisan route:list --path=trip-tickets/gatekeeper`.
+
+- [x] 2026-07-09: Gatekeeper departure and return write API endpoints added.
+  - Added `POST api/trip-tickets/gatekeeper/{tripTicket}/departure` to record actual departure, set `departure_recorded_by`, `departure_recorded_at`, optional Gatekeeper remarks, and move the ticket from `approved` to `dispatched`.
+  - Added `POST api/trip-tickets/gatekeeper/{tripTicket}/return` to record actual return, set `return_recorded_by`, `return_recorded_at`, optional Gatekeeper remarks, and move the ticket from `dispatched` to `completed`.
+  - Both actions require `can_gatekeep_trip_tickets`, lock the trip ticket row during update, prevent duplicate writes, and create `TripTicketLog` entries.
+  - Verified with PHP syntax checks and `php artisan route:list --path=trip-tickets/gatekeeper`.
+
+- [x] 2026-07-09: Gatekeeper migrations applied to the configured database.
+  - Ran `php artisan migrate --force` successfully.
+  - Confirmed migrations `2026_07_09_000001_add_gatekeeper_fields_to_trip_tickets_table` and `2026_07_09_000002_add_gatekeeper_permission_to_users_table` are marked `Ran`.
+  - Verified `trip_tickets.departure_recorded_by`, `trip_tickets.return_recorded_by`, `trip_tickets.qr_token`, and `users.can_gatekeep_trip_tickets` exist.
+
+- [x] 2026-07-09: Default Gatekeeper user account enabled.
+  - Created or updated user `trip_gatekeeper` as `Trip Ticket Gatekeeper` in the configured database.
+  - Enabled `can_gatekeep_trip_tickets` and kept encoder, approver, and manager trip-ticket permissions disabled.
+  - Used the existing `trip_encoder` password hash to match the current seeded trip-ticket account convention because `TRIP_TICKET_DEFAULT_PASSWORD` is not currently set.
+  - Verified `App\Models\User::canGatekeepTripTickets()` returns true for `trip_gatekeeper`.
+
+- [x] 2026-07-09: Gatekeeper mobile app integration added.
+  - Updated the Flutter mobile app session model to read `can_gatekeep_trip_tickets` from the login/me permissions payload.
+  - Added Gatekeeper navigation in `mobile/trip_ticket_app/lib/screens/portal_shell_screen.dart`.
+  - Added `mobile/trip_ticket_app/lib/screens/gatekeeper_screen.dart` with Ready, Return, and Search tabs.
+  - Connected the app to Gatekeeper daily list, plate/ticket search, QR token lookup, record departure, and record return API methods in `ApiService`.
+  - Updated the mobile trip ticket model for Gatekeeper audit fields and action flags.
+  - Verified with `git diff --check`; Flutter/Dart analyze could not be run because no Flutter or Dart SDK is available in this environment.
+  - Note: QR camera scanning is not included in this slice; current QR support is token lookup input. Camera scanning should be added next with a mobile scanner package and Android camera permission.
+
+- [x] 2026-07-09: Gatekeeper mobile QR camera scanning added.
+  - Added Flutter dependency `mobile_scanner` for QR camera scanning.
+  - Added Android `CAMERA` permission to `mobile/trip_ticket_app/android/app/src/main/AndroidManifest.xml`.
+  - Added `mobile/trip_ticket_app/lib/screens/qr_scan_screen.dart` for live QR scanning, flashlight toggle, camera switch, and scan cancellation.
+  - Updated Gatekeeper Search tab to support both camera scanning and manual QR token lookup.
+  - Verified with `dart format lib`, `flutter analyze`, `flutter test`, and `git diff --check`.
+  - APK release/build is intentionally not included in this slice per request.

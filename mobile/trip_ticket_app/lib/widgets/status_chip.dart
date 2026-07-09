@@ -36,6 +36,18 @@ class StatusChip extends StatelessWidget {
           foreground: Color(0xff027a48),
           border: Color(0xffabefc6),
         );
+      case 'dispatched':
+        return const _StatusAppearance(
+          background: Color(0xffeef4ff),
+          foreground: Color(0xff3538cd),
+          border: Color(0xffc7d7fe),
+        );
+      case 'completed':
+        return const _StatusAppearance(
+          background: Color(0xfff0fdf4),
+          foreground: Color(0xff15803d),
+          border: Color(0xffbbf7d0),
+        );
       case 'rejected':
         return const _StatusAppearance(
           background: Color(0xfffff1f3),

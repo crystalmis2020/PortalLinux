@@ -2,6 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use BaconQrCode\Renderer\Image\SvgImageBackEnd;
+use BaconQrCode\Renderer\ImageRenderer;
+use BaconQrCode\Renderer\RendererStyle\RendererStyle;
+use BaconQrCode\Writer;
 use Carbon\Carbon;
 use App\Http\Requests\StoreTripTicketRequest;
 use App\Http\Requests\EncodeTripTicketRequest;
@@ -264,6 +268,12 @@ class TripTicketController extends Controller
 
         abort_unless($tripTicket->status === TripTicket::STATUS_APPROVED, 403);
 
+        if (!$tripTicket->qr_token) {
+            $tripTicket->forceFill([
+                'qr_token' => TripTicket::generateQrToken(),
+            ])->save();
+        }
+
         $tripTicket->load([
             'requester:id,full_name',
             'department:id,name',
@@ -274,8 +284,17 @@ class TripTicketController extends Controller
             'approver:id,full_name',
         ]);
 
+        $qrValue = 'TT:' . $tripTicket->qr_token;
+        $qrRenderer = new ImageRenderer(
+            new RendererStyle(132),
+            new SvgImageBackEnd()
+        );
+        $qrSvg = (new Writer($qrRenderer))->writeString($qrValue);
+
         return view('trip-tickets.print', [
             'ticket' => $tripTicket,
+            'qrValue' => $qrValue,
+            'qrSvg' => $qrSvg,
         ]);
     }
 

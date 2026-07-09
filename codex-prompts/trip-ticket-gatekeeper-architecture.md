@@ -386,3 +386,9 @@ Before implementing the Gatekeeper and Driver Workload Advisory features, confir
   - Updated Gatekeeper Search tab to support both camera scanning and manual QR token lookup.
   - Verified with `dart format lib`, `flutter analyze`, `flutter test`, and `git diff --check`.
   - APK release/build is intentionally not included in this slice per request.
+
+- [x] 2026-07-09: Printed trip ticket simplified to half-A4 with QR code.
+  - Added `bacon/bacon-qr-code` for local SVG QR generation without requiring PHP GD.
+  - Updated `TripTicketController::print()` to ensure approved tickets have a `qr_token` and to pass inline SVG QR data to the print view.
+  - Reworked `resources/views/trip-tickets/print.blade.php` into a compact half-A4 layout with core trip fields, signatures, and QR value `TT:{qr_token}`.
+  - Verified with PHP syntax check, Blade render smoke test, and `git diff --check`.

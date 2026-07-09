@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Events\MessengerCallSignalReceived;
+use App\Events\MessengerMessagesRead;
 use App\Models\MessengerConversation;
 use App\Models\MessengerMessage;
 use App\Models\Notification;
@@ -47,10 +48,31 @@ class MessengerController extends Controller
 
         $conversation = $this->findOrCreateConversation($authUser->id, $user->id);
 
-        MessengerMessage::where('conversation_id', $conversation->id)
+        $unreadMessageIds = MessengerMessage::where('conversation_id', $conversation->id)
             ->where('recipient_id', $authUser->id)
             ->whereNull('read_at')
-            ->update(['read_at' => now()]);
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        if (!empty($unreadMessageIds)) {
+            $readAt = now();
+
+            MessengerMessage::whereIn('id', $unreadMessageIds)
+                ->update(['read_at' => $readAt]);
+
+            try {
+                event(new MessengerMessagesRead(
+                    $conversation->id,
+                    $authUser->id,
+                    $user->id,
+                    $unreadMessageIds,
+                    $readAt->toIso8601String(),
+                ));
+            } catch (\Throwable $exception) {
+                report($exception);
+            }
+        }
 
         $limit = (int) ($validated['limit'] ?? 50);
         $afterId = isset($validated['after_id']) ? (int) $validated['after_id'] : null;

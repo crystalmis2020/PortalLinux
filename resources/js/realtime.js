@@ -265,6 +265,9 @@ function initRealtime() {
                 },
             });
         })
+        .listen('.messenger.messages.read', (payload) => {
+            dispatchWindowEvent('portal-messenger-messages-read', payload);
+        })
         .listen('.messenger.call.signal', (payload) => {
             dispatchWindowEvent('portal-messenger-call-signal-received', payload);
 

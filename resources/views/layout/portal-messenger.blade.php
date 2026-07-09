@@ -392,6 +392,18 @@
         font-size: 0.78rem;
     }
 
+    .portal-messenger__seen {
+        margin: 2px 0 0;
+        color: var(--pm-primary-dark);
+        font-size: 0.72rem;
+        font-weight: 800;
+        text-align: right;
+    }
+
+    .portal-messenger__message.is-mine .portal-messenger__time {
+        display: none;
+    }
+
     .portal-messenger__message-actions {
         display: flex;
         justify-content: flex-end;
@@ -1156,6 +1168,7 @@
     html.dark-theme .portal-messenger__contact-meta,
     html.dark-theme .portal-messenger__thread-meta,
     html.dark-theme .portal-messenger__time,
+    html.dark-theme .portal-messenger__seen,
     html.dark-theme .portal-messenger__empty,
     html.dark-theme .portal-messenger__placeholder,
     html.dark-theme .portal-messenger__pending-meta,
@@ -2067,6 +2080,26 @@
                 .replace(/>/g, '&gt;')
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#039;');
+        }
+
+        function formatSeenDate(value) {
+            if (!value) {
+                return '';
+            }
+
+            const date = new Date(value);
+
+            if (Number.isNaN(date.getTime())) {
+                return '';
+            }
+
+            return date.toLocaleString([], {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+            });
         }
 
         function formatFileSize(bytes) {
@@ -2996,16 +3029,29 @@
             }
 
             const selectedReportMessageIds = getSelectedReportMessageIds();
+            const latestSeenOutgoingMessageId = state.messages.reduce((latestId, message) => {
+                if (!message.is_mine || !message.read_at) {
+                    return latestId;
+                }
 
-            elements.messages.innerHTML = state.messages.map((message) => `
-                <div class="portal-messenger__message ${message.is_mine ? 'is-mine' : ''} ${state.reportSelection.active ? 'is-report-selectable' : ''} ${selectedReportMessageIds.includes(Number(message.id)) ? 'is-report-selected' : ''}" data-message-id="${message.id}">
-                    <div class="portal-messenger__bubble">
-                        ${message.body ? `<div class="portal-messenger__body">${escapeHtml(message.body)}</div>` : ''}
-                        ${renderAttachment(message.attachment)}
+                return Math.max(latestId, Number(message.id) || 0);
+            }, 0);
+
+            elements.messages.innerHTML = state.messages.map((message) => {
+                const isLatestSeenOutgoing = Number(message.id) === latestSeenOutgoingMessageId;
+                const seenDate = isLatestSeenOutgoing ? formatSeenDate(message.read_at) : '';
+
+                return `
+                    <div class="portal-messenger__message ${message.is_mine ? 'is-mine' : ''} ${state.reportSelection.active ? 'is-report-selectable' : ''} ${selectedReportMessageIds.includes(Number(message.id)) ? 'is-report-selected' : ''}" data-message-id="${message.id}">
+                        <div class="portal-messenger__bubble">
+                            ${message.body ? `<div class="portal-messenger__body">${escapeHtml(message.body)}</div>` : ''}
+                            ${renderAttachment(message.attachment)}
+                        </div>
+                        ${message.is_mine ? '' : `<p class="portal-messenger__time">${escapeHtml(message.time_label || message.created_at_human || '')}</p>`}
+                        ${seenDate ? `<p class="portal-messenger__seen">Seen (${escapeHtml(seenDate)})</p>` : ''}
                     </div>
-                    <p class="portal-messenger__time ${message.is_mine ? 'text-end' : ''}">${escapeHtml(message.time_label || message.created_at_human || '')}</p>
-                </div>
-            `).join('');
+                `;
+            }).join('');
 
             if (options.preserveTop && previousScrollHeight > 0) {
                 elements.messages.scrollTop = previousScrollTop + (elements.messages.scrollHeight - previousScrollHeight);
@@ -3913,6 +3959,36 @@
                     }
                 })
                 .catch(function () {});
+        });
+
+        window.addEventListener('portal-messenger-messages-read', function (event) {
+            const payload = event.detail || {};
+            const conversationId = Number(payload.conversation_id || 0);
+            const readAt = payload.read_at || new Date().toISOString();
+            const readMessageIds = Array.isArray(payload.message_ids)
+                ? payload.message_ids.map((id) => Number(id)).filter(Boolean)
+                : [];
+
+            if (!conversationId || conversationId !== Number(state.conversationId || 0) || !readMessageIds.length) {
+                return;
+            }
+
+            let changed = false;
+            state.messages = state.messages.map((message) => {
+                if (!message.is_mine || !readMessageIds.includes(Number(message.id)) || message.read_at) {
+                    return message;
+                }
+
+                changed = true;
+                return {
+                    ...message,
+                    read_at: readAt,
+                };
+            });
+
+            if (changed) {
+                renderMessages({ preserveScroll: true });
+            }
         });
 
         window.addEventListener('portal-messenger-open-user', function (event) {

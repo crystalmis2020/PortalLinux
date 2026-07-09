@@ -85,6 +85,7 @@ Route::middleware(['auth'])->prefix('reports')->name('reports.')->controller(Rep
     Route::get('/', 'index')->name('index');
     Route::get('/assigned-to/{user?}/status/{status?}', 'index')->name('filter');
     Route::get('/export/assigned-to/{user?}/status/{status?}', 'export')->name('export');
+    Route::post('/export-selected/assigned-to/{user?}/status/{status?}', 'exportSelected')->name('export-selected');
     Route::get('/details/{report}/{notification_id?}', 'details')->name('details');
     Route::post('/{report}/update', 'update')->name('update');
     Route::post('/assign/{report}', 'assign')->name('assign');
@@ -137,6 +138,7 @@ Route::middleware(['auth'])->prefix('trip-tickets')->name('trip-tickets.')->cont
     Route::delete('/vehicles/{vehicle}', [TripTicketVehicleController::class, 'destroy'])->name('vehicles.destroy');
     Route::get('/create', 'create')->name('create');
     Route::post('/', 'store')->name('store');
+    Route::get('/{tripTicket}/availability', 'availability')->name('availability');
     Route::get('/{tripTicket}/edit', 'edit')->name('edit');
     Route::put('/{tripTicket}', 'update')->name('update');
     Route::post('/{tripTicket}/encode', 'encode')->name('encode');

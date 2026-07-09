@@ -215,10 +215,12 @@
                     <div class="field-label">Destination</div>
                     <div class="field-value">{{ $ticket->destination }}</div>
                 </div>
-                <div>
-                    <div class="field-label">Road KM from Maramag</div>
-                    <div class="field-value">{{ $ticket->distance_km !== null ? number_format($ticket->distance_km, 2) . ' km' : 'N/A' }}</div>
-                </div>
+                @if ($ticket->distance_km !== null && (float) $ticket->distance_km > 0)
+                    <div>
+                        <div class="field-label">Road KM from Maramag</div>
+                        <div class="field-value">{{ number_format($ticket->distance_km, 2) }} km</div>
+                    </div>
+                @endif
             </div>
         </section>
 
@@ -227,19 +229,19 @@
             <div class="grid">
                 <div>
                     <div class="field-label">Requested Departure</div>
-                    <div class="field-value">{{ $ticket->requested_start_datetime?->format('M d, Y h:i A') }}</div>
+                    <div class="field-value">{{ $ticket->requested_start_datetime?->format('M d, Y') }}</div>
                 </div>
                 <div>
                     <div class="field-label">Requested Return</div>
-                    <div class="field-value">{{ $ticket->requested_end_datetime?->format('M d, Y h:i A') }}</div>
+                    <div class="field-value">{{ $ticket->requested_end_datetime?->format('M d, Y') }}</div>
                 </div>
                 <div>
                     <div class="field-label">Actual Departure</div>
-                    <div class="field-value">{{ $ticket->actual_departure_datetime?->format('M d, Y h:i A') ?? 'N/A' }}</div>
+                    <div class="field-value">{{ $ticket->actual_departure_datetime?->format('M d, Y') ?? 'N/A' }}</div>
                 </div>
                 <div>
                     <div class="field-label">Actual Return</div>
-                    <div class="field-value">{{ $ticket->actual_return_datetime?->format('M d, Y h:i A') ?? 'N/A' }}</div>
+                    <div class="field-value">{{ $ticket->actual_return_datetime?->format('M d, Y') ?? 'N/A' }}</div>
                 </div>
             </div>
         </section>

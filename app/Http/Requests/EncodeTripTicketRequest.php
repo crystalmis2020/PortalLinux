@@ -26,7 +26,7 @@ class EncodeTripTicketRequest extends FormRequest
             'vehicle_id' => ['required', 'integer', 'exists:vehicles,id'],
             'driver_id' => ['required', 'integer', 'exists:drivers,id'],
             'actual_departure_datetime' => ['nullable', 'required_with:actual_return_datetime', 'date'],
-            'actual_return_datetime' => ['nullable', 'date', 'after:actual_departure_datetime'],
+            'actual_return_datetime' => ['nullable', 'date', 'after_or_equal:actual_departure_datetime'],
             'remarks' => ['nullable', 'string'],
         ];
     }
@@ -34,7 +34,7 @@ class EncodeTripTicketRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'actual_return_datetime.after' => 'The actual return date/time must be after the actual departure date/time.',
+            'actual_return_datetime.after_or_equal' => 'The actual return date must be the same as or after the actual departure date.',
         ];
     }
 }

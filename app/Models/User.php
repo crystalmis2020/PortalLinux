@@ -192,7 +192,7 @@ class User extends Authenticatable
 
     public function canManageTripTickets(): bool
     {
-        return $this->isAdmin() || $this->is_sudo || $this->can_manage_trip_tickets;
+        return $this->is_sudo || $this->can_manage_trip_tickets;
     }
 
     public function canPrintTripTickets(): bool

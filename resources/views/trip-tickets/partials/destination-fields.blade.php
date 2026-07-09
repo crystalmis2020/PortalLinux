@@ -8,7 +8,7 @@
 
 <div class="col-12">
     <div class="border-top pt-3 mt-1">
-        <h6 class="mb-0 text-uppercase text-muted small fw-semibold">Destination</h6>
+        <h6 class="trip-ticket-section-title mb-0">Destination</h6>
     </div>
 </div>
 <div class="col-12 col-lg-4">

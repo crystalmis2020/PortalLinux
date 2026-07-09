@@ -4,16 +4,75 @@
     <link href="{{ asset('assets/plugins/select2/css/select2.min.css') }}" rel="stylesheet" />
     <link href="{{ asset('assets/plugins/select2/css/select2-bootstrap5.css') }}" rel="stylesheet" />
     <style>
+        .trip-ticket-form-card {
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            border-radius: 8px;
+            box-shadow: none;
+        }
+
+        .trip-ticket-form-card .card-header {
+            border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+        }
+
         .trip-ticket-form .form-label {
+            color: #334155;
             font-weight: 600;
+            margin-bottom: 0.35rem;
+        }
+
+        .trip-ticket-form .form-control,
+        .trip-ticket-form .form-select {
+            border-color: #dbe3ef;
+        }
+
+        .trip-ticket-form .form-control:focus,
+        .trip-ticket-form .form-select:focus {
+            border-color: #86b7fe;
+            box-shadow: 0 0 0 .18rem rgba(13, 110, 253, .12);
         }
 
         .trip-ticket-form .select2-container--bootstrap-5 .select2-selection {
             min-height: calc(1.5em + .75rem + 2px);
+            border-color: #dbe3ef;
         }
 
         .trip-ticket-form .input-group-text {
-            background-color: #f8f9fa;
+            background-color: #f8fafc;
+            border-color: #dbe3ef;
+            color: #475569;
+            font-weight: 600;
+        }
+
+        .trip-ticket-section-title {
+            align-items: center;
+            color: #64748b;
+            display: flex;
+            font-size: 0.74rem;
+            font-weight: 700;
+            gap: 8px;
+            letter-spacing: 0;
+            text-transform: uppercase;
+        }
+
+        .trip-ticket-section-title::before {
+            background: #0d6efd;
+            border-radius: 999px;
+            content: '';
+            height: 8px;
+            width: 8px;
+        }
+
+        .trip-ticket-form-actions {
+            background: #fff;
+            border-top: 1px solid rgba(15, 23, 42, 0.08);
+            margin: 24px -1rem -1rem;
+            padding: 16px 1rem 0;
+        }
+
+        html.dark-theme .trip-ticket-form-card,
+        html.dark-theme .trip-ticket-form-actions {
+            background: rgba(255, 255, 255, 0.03);
+            border-color: rgba(255, 255, 255, 0.08);
         }
     </style>
 @endsection
@@ -44,7 +103,7 @@
         </div>
     @endif
 
-    <div class="card" style="border-radius: 8px;">
+    <div class="card trip-ticket-form-card">
         <div class="card-header bg-transparent">
             <h5 class="mb-1">Edit Trip Ticket Request</h5>
             <p class="text-muted small mb-0">{{ $ticket->ticket_number ?: 'Request #' . $ticket->id }}</p>
@@ -56,7 +115,7 @@
 
                 <div class="row g-3">
                     <div class="col-12">
-                        <h6 class="mb-0 text-uppercase text-muted small fw-semibold">Requester</h6>
+                        <h6 class="trip-ticket-section-title mb-0">Requester</h6>
                     </div>
                     <div class="col-12 col-md-6">
                         <label class="form-label">Requester</label>
@@ -92,7 +151,7 @@
 
                     <div class="col-12">
                         <div class="border-top pt-3 mt-1">
-                            <h6 class="mb-0 text-uppercase text-muted small fw-semibold">Schedule</h6>
+                            <h6 class="trip-ticket-section-title mb-0">Schedule</h6>
                         </div>
                     </div>
                     <div class="col-12 col-md-6">
@@ -108,7 +167,7 @@
 
                     <div class="col-12">
                         <div class="border-top pt-3 mt-1">
-                            <h6 class="mb-0 text-uppercase text-muted small fw-semibold">Trip Details</h6>
+                            <h6 class="trip-ticket-section-title mb-0">Trip Details</h6>
                         </div>
                     </div>
                     <div class="col-12">
@@ -129,8 +188,8 @@
                     </div>
                 </div>
 
-                <div class="d-flex justify-content-end gap-2 mt-4">
-                    <a href="{{ route('trip-tickets.show', $ticket) }}" class="btn btn-outline-secondary">Cancel</a>
+                <div class="trip-ticket-form-actions d-flex justify-content-end gap-2 mt-4">
+                    <a href="{{ route('trip-tickets.show', $ticket) }}" class="btn btn-outline-secondary"><i class="bx bx-arrow-back me-1"></i>Cancel</a>
                     <button type="submit" class="btn btn-primary">
                         <i class="bx bx-save me-1"></i>Save Changes
                     </button>

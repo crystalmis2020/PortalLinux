@@ -68,7 +68,7 @@ class StoreTripTicketRequest extends FormRequest
             'destination' => ['required', 'string'],
             'distance_km' => ['required', 'numeric', 'min:0'],
             'requested_start_datetime' => ['required', 'date'],
-            'requested_end_datetime' => ['required', 'date', 'after:requested_start_datetime'],
+            'requested_end_datetime' => ['required', 'date', 'after_or_equal:requested_start_datetime'],
             'passengers' => ['nullable', 'string'],
             'contact_number' => ['nullable', 'string', 'max:50'],
             'remarks' => ['nullable', 'string'],
@@ -78,7 +78,7 @@ class StoreTripTicketRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'requested_end_datetime.after' => 'The return date must be after the departure date.',
+            'requested_end_datetime.after_or_equal' => 'The return date must be the same as or after the departure date.',
             'destination_mode.required' => 'Please select a destination type.',
             'local_destination.required_if' => 'Please specify the destination within Maramag.',
             'destination_region.required' => 'Please select a Mindanao region.',

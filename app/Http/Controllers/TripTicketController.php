@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Carbon\Carbon;
 use App\Http\Requests\StoreTripTicketRequest;
 use App\Http\Requests\EncodeTripTicketRequest;
 use App\Models\Department;
@@ -20,23 +21,24 @@ class TripTicketController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
+        $isDispatcher = (bool) $user->canEncodeTripTickets();
 
         $ticketsQuery = TripTicket::query()
-            ->with(['requester:id,full_name', 'department:id,name', 'section:id,name', 'vehicle:id,plate_number,description', 'driver:id,name', 'location:id,destination'])
+            ->with([
+                'requester:id,full_name,department_id,section_id',
+                'department:id,name',
+                'section:id,name',
+                'vehicle:id,plate_number,description',
+                'driver:id,name',
+                'encoder:id,full_name',
+                'approver:id,full_name',
+                'location:id,region_name,province_name,city_municipality_name,destination',
+                'logs.user:id,full_name',
+            ])
             ->latest()
             ->latest('id');
 
-        if ($user->canManageTripTickets()) {
-            // Managers can view the full trip ticket registry.
-        } elseif ($user->canEncodeTripTickets()) {
-            $ticketsQuery->where(function ($query) use ($user) {
-                $query->where('requested_by', $user->id)
-                    ->orWhereIn('status', [
-                        TripTicket::STATUS_PENDING_DETAILS,
-                        TripTicket::STATUS_RETURNED,
-                    ]);
-            });
-        } else {
+        if (! $isDispatcher) {
             $ticketsQuery->where('requested_by', $user->id);
         }
 
@@ -45,17 +47,42 @@ class TripTicketController extends Controller
         }
 
         $tickets = $ticketsQuery->paginate(15)->withQueryString();
+        $dispatcherDrivers = $isDispatcher
+            ? Driver::query()->where('is_active', true)->orderBy('name')->get()
+            : collect();
+        $dispatcherVehicles = $isDispatcher
+            ? Vehicle::query()->where('is_available', true)->orderBy('description')->orderBy('plate_number')->get()
+            : collect();
+        $ticketUi = [];
+
+        foreach ($tickets->getCollection() as $ticket) {
+            if (! $isDispatcher) {
+                continue;
+            }
+
+            $canEncodeDetails = $this->canEncodeDetails($request, $ticket);
+            $scheduleWindow = $this->tripTicketScheduleWindow($ticket);
+            $resourceConflicts = $canEncodeDetails
+                ? $this->resourceConflictLabels($ticket, $scheduleWindow['start'], $scheduleWindow['end'])
+                : ['drivers' => collect(), 'vehicles' => collect()];
+
+            $ticketUi[$ticket->id] = [
+                'can_edit' => $this->canEditRequest($request, $ticket),
+                'can_encode' => $canEncodeDetails,
+                'scheduled_drivers' => $resourceConflicts['drivers'],
+                'scheduled_vehicles' => $resourceConflicts['vehicles'],
+                'availability_url' => $canEncodeDetails ? route('trip-tickets.availability', $ticket) : null,
+            ];
+        }
 
         return view('trip-tickets.index', [
             'tickets' => $tickets,
             'statuses' => TripTicket::statuses(),
             'selectedStatus' => $request->string('status')->toString(),
-            'dispatcherDrivers' => $user->canEncodeTripTickets()
-                ? Driver::query()->orderBy('name')->get()
-                : collect(),
-            'dispatcherVehicles' => $user->canEncodeTripTickets()
-                ? Vehicle::query()->orderBy('description')->orderBy('plate_number')->get()
-                : collect(),
+            'dispatcherDrivers' => $dispatcherDrivers,
+            'dispatcherVehicles' => $dispatcherVehicles,
+            'ticketUi' => $ticketUi,
+            'isDispatcher' => $isDispatcher,
         ]);
     }
 
@@ -129,7 +156,7 @@ class TripTicketController extends Controller
         });
 
         return redirect()
-            ->route('trip-tickets.show', $tripTicket)
+            ->route('trip-tickets.index')
             ->with('success', 'Trip ticket request updated successfully.');
     }
 
@@ -172,7 +199,7 @@ class TripTicketController extends Controller
         });
 
         return redirect()
-            ->route('trip-tickets.show', $ticket)
+            ->route('trip-tickets.index')
             ->with('success', 'Trip ticket request submitted successfully.');
     }
 
@@ -192,6 +219,10 @@ class TripTicketController extends Controller
         ]);
 
         $canEncodeDetails = $this->canEncodeDetails($request, $tripTicket);
+        $scheduleWindow = $this->tripTicketScheduleWindow($tripTicket);
+        $resourceConflicts = $canEncodeDetails
+            ? $this->resourceConflictLabels($tripTicket, $scheduleWindow['start'], $scheduleWindow['end'])
+            : ['drivers' => collect(), 'vehicles' => collect()];
 
         return view('trip-tickets.show', [
             'ticket' => $tripTicket,
@@ -203,6 +234,27 @@ class TripTicketController extends Controller
             'dispatcherVehicles' => $canEncodeDetails
                 ? Vehicle::query()->where('is_available', true)->orderBy('description')->orderBy('plate_number')->get()
                 : collect(),
+            'scheduledDrivers' => $resourceConflicts['drivers'],
+            'scheduledVehicles' => $resourceConflicts['vehicles'],
+            'availabilityUrl' => $canEncodeDetails ? route('trip-tickets.availability', $tripTicket) : null,
+        ]);
+    }
+
+    public function availability(Request $request, TripTicket $tripTicket)
+    {
+        abort_unless($this->canEncodeDetails($request, $tripTicket), 403);
+
+        $validated = $request->validate([
+            'actual_departure_datetime' => ['nullable', 'date'],
+            'actual_return_datetime' => ['nullable', 'date', 'after_or_equal:actual_departure_datetime'],
+        ]);
+
+        $scheduleWindow = $this->tripTicketScheduleWindow($tripTicket, $validated);
+        $resourceConflicts = $this->resourceConflictLabels($tripTicket, $scheduleWindow['start'], $scheduleWindow['end']);
+
+        return response()->json([
+            'drivers' => $resourceConflicts['drivers'],
+            'vehicles' => $resourceConflicts['vehicles'],
         ]);
     }
 
@@ -233,6 +285,20 @@ class TripTicketController extends Controller
 
         $payload = $request->validated();
         $user = $request->user();
+        $scheduleWindow = $this->tripTicketScheduleWindow($tripTicket, $payload);
+        $conflicts = $this->resourceConflicts($tripTicket, $scheduleWindow['start'], $scheduleWindow['end']);
+
+        if ($conflicts->where('vehicle_id', (int) $payload['vehicle_id'])->isNotEmpty()) {
+            return back()->withInput()->withErrors([
+                'vehicle_id' => 'The selected vehicle is already scheduled for another trip during this time.',
+            ]);
+        }
+
+        if ($conflicts->where('driver_id', (int) $payload['driver_id'])->isNotEmpty()) {
+            return back()->withInput()->withErrors([
+                'driver_id' => 'The selected driver is already scheduled for another trip during this time.',
+            ]);
+        }
 
         DB::transaction(function () use ($tripTicket, $payload, $user): void {
             $ticket = TripTicket::query()
@@ -282,10 +348,88 @@ class TripTicketController extends Controller
         });
 
         return redirect()
-            ->route('trip-tickets.show', $tripTicket)
+            ->route('trip-tickets.index')
             ->with('success', 'Trip ticket details encoded and submitted for approval.');
     }
 
+
+    protected function tripTicketScheduleWindow(TripTicket $tripTicket, array $payload = []): array
+    {
+        $start = $payload['actual_departure_datetime']
+            ?? $tripTicket->actual_departure_datetime
+            ?? $tripTicket->requested_start_datetime;
+        $end = $payload['actual_return_datetime']
+            ?? $tripTicket->actual_return_datetime
+            ?? $tripTicket->requested_end_datetime;
+
+        $start = $start instanceof Carbon ? $start->copy() : Carbon::parse($start);
+        $end = $end instanceof Carbon ? $end->copy() : Carbon::parse($end);
+
+        return [
+            'start' => $start->startOfDay(),
+            'end' => $end->endOfDay(),
+        ];
+    }
+
+    protected function resourceConflicts(TripTicket $tripTicket, Carbon $start, Carbon $end)
+    {
+        return $this->resourceScheduleConflicts($tripTicket, $start, $end)
+            ->whereIn('status', [
+                TripTicket::STATUS_APPROVED,
+                TripTicket::STATUS_DISPATCHED,
+            ])
+            ->get();
+    }
+
+    protected function resourceScheduleConflicts(TripTicket $tripTicket, Carbon $start, Carbon $end)
+    {
+        $databaseStart = $start->copy()->utc()->format('Y-m-d H:i:s');
+        $databaseEnd = $end->copy()->utc()->format('Y-m-d H:i:s');
+
+        return TripTicket::query()
+            ->whereKeyNot($tripTicket->id)
+            ->whereIn('status', [
+                TripTicket::STATUS_FOR_APPROVAL,
+                TripTicket::STATUS_APPROVED,
+                TripTicket::STATUS_DISPATCHED,
+            ])
+            ->where(function ($query) {
+                $query->whereNotNull('vehicle_id')
+                    ->orWhereNotNull('driver_id');
+            })
+            ->whereRaw('COALESCE(actual_departure_datetime, requested_start_datetime) < ?', [$databaseEnd])
+            ->whereRaw('COALESCE(actual_return_datetime, requested_end_datetime) > ?', [$databaseStart])
+            ->with(['vehicle:id,plate_number,description', 'driver:id,name']);
+    }
+
+    protected function resourceConflictLabels(TripTicket $tripTicket, Carbon $start, Carbon $end): array
+    {
+        $conflicts = $this->resourceScheduleConflicts($tripTicket, $start, $end)->get();
+
+        return [
+            'drivers' => $conflicts
+                ->whereNotNull('driver_id')
+                ->groupBy('driver_id')
+                ->map(fn ($tickets) => $this->resourceConflictMeta($tickets->first())),
+            'vehicles' => $conflicts
+                ->whereNotNull('vehicle_id')
+                ->groupBy('vehicle_id')
+                ->map(fn ($tickets) => $this->resourceConflictMeta($tickets->first())),
+        ];
+    }
+
+    protected function resourceConflictMeta(TripTicket $ticket): array
+    {
+        $isBlocked = in_array($ticket->status, [
+            TripTicket::STATUS_APPROVED,
+            TripTicket::STATUS_DISPATCHED,
+        ], true);
+
+        return [
+            'label' => $isBlocked ? 'scheduled' : 'waiting for approval',
+            'blocked' => $isBlocked,
+        ];
+    }
 
     protected function ensureCanEdit(Request $request, TripTicket $tripTicket): void
     {

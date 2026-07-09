@@ -120,6 +120,9 @@
             >
                 <i class="bx bx-spreadsheet me-1"></i>Export Excel
             </a>
+            <button type="button" class="btn btn-success" id="toggle-selected-export" data-export-ready="0">
+                <i class="bx bx-list-check me-1"></i>Export Selected
+            </button>
             <div class="btn-group">
             <button type="button" class="btn btn-primary  dropdown-toggle-split" data-bs-toggle="dropdown">View By</button>
             <button type="button" class="btn btn-primary split-bg-primary dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown">	<span class="visually-hidden">Toggle Dropdown</span>
@@ -165,10 +168,21 @@
                 </div>
             </div>
             <div class="card-body">
+                @error('report_ids')
+                <div class="alert alert-danger" role="alert">{{ $message }}</div>
+                @enderror
+
+                <form method="POST" action="{{ route('reports.export-selected', ['user' => $userId, 'status' => $status]) }}" id="selectedReportsExportForm">
+                    @csrf
                 <div class="table-responsive report-table-wrap">
                     <table class="table mb-0 table-hover table-bordered report-table">
                         <thead>
                             <tr>
+                                @if(auth()->user()->user_type == 'admin')
+                                <th class="text-center selected-export-control d-none" style="width: 48px;">
+                                    <input class="form-check-input" type="checkbox" id="select-all-reports" aria-label="Select all reports">
+                                </th>
+                                @endif
                                 <th>From Department</th>
                                 <th class="report-issue-col">Reported Issue</th>
                                 <th scope="col">Reported by</th>
@@ -180,6 +194,11 @@
                         <tbody>
                             @foreach ($reports as $report)
                             <tr>
+                                @if(auth()->user()->user_type == 'admin')
+                                <td class="text-center selected-export-control d-none">
+                                    <input class="form-check-input report-select-checkbox" type="checkbox" name="report_ids[]" value="{{ $report->id }}" aria-label="Select report {{ $report->id }}">
+                                </td>
+                                @endif
                                 <td>{{ $report->departmentAddressFrom->name ?? 'N/A' }} - {{ $report->sectionAddressFrom->name ?? 'N/A' }}</td>
                                 <td class="report-issue-col">
                                     @php
@@ -224,6 +243,7 @@
                         </tbody>
                     </table>
                 </div>
+                </form>
             </div>
         </div>
     </div>
@@ -285,6 +305,56 @@
 
         document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function (element) {
             new bootstrap.Tooltip(element);
+        });
+
+        const selectedExportButton = document.getElementById('toggle-selected-export');
+        const selectedExportForm = document.getElementById('selectedReportsExportForm');
+        const selectAllReports = document.getElementById('select-all-reports');
+        const reportCheckboxes = document.querySelectorAll('.report-select-checkbox');
+        const selectedExportControls = document.querySelectorAll('.selected-export-control');
+
+        if (selectedExportButton) {
+            selectedExportButton.addEventListener('click', function () {
+                if (selectedExportButton.dataset.exportReady !== '1') {
+                    selectedExportControls.forEach(function (control) {
+                        control.classList.remove('d-none');
+                    });
+                    selectedExportButton.dataset.exportReady = '1';
+                    selectedExportButton.innerHTML = '<i class="bx bx-download me-1"></i>Download Selected';
+                    return;
+                }
+
+                const hasSelectedReport = Array.from(reportCheckboxes).some(function (checkbox) {
+                    return checkbox.checked;
+                });
+
+                if (!hasSelectedReport) {
+                    alert('Please select at least one report to export.');
+                    return;
+                }
+
+                selectedExportForm.submit();
+            });
+        }
+
+        if (selectAllReports) {
+            selectAllReports.addEventListener('change', function () {
+                reportCheckboxes.forEach(function (checkbox) {
+                    checkbox.checked = selectAllReports.checked;
+                });
+            });
+        }
+
+        reportCheckboxes.forEach(function (checkbox) {
+            checkbox.addEventListener('change', function () {
+                if (!selectAllReports) {
+                    return;
+                }
+
+                selectAllReports.checked = Array.from(reportCheckboxes).every(function (item) {
+                    return item.checked;
+                });
+            });
         });
     });
 </script>

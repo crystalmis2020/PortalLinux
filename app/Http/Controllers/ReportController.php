@@ -63,13 +63,6 @@ class ReportController extends Controller
             ->latest()
             ->get();
 
-        $assignedUserIds = $reports
-            ->flatMap(fn (Report $report) => $report->assigned_users ?? [])
-            ->filter()
-            ->unique()
-            ->values();
-
-        $assignedUsers = User::whereIn('id', $assignedUserIds)->pluck('full_name', 'id');
         $viewLabel = $userId === 'all'
             ? 'all'
             : str($this->exportUserLabel($userId))->slug('-')->value();
@@ -78,14 +71,78 @@ class ReportController extends Controller
             : 'all';
         $filename = 'reports_' . $viewLabel . '_' . $statusLabel . '_' . now()->format('Y-m-d') . '.xls';
 
-        return response()->streamDownload(function () use ($reports, $assignedUsers) {
+        return $this->downloadReportWorkbook($reports, $filename, $userId, $status, 'Full Report Export');
+    }
+
+    public function exportSelected(Request $request, $userId = null, $status = null): StreamedResponse
+    {
+        $user = auth()->user();
+
+        if (!$user->isAdmin()) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'report_ids' => 'required|array|min:1',
+            'report_ids.*' => 'integer|exists:reports,id',
+        ], [
+            'report_ids.required' => 'Please select at least one report to export.',
+            'report_ids.min' => 'Please select at least one report to export.',
+        ]);
+
+        $userId = ($userId == null) ? $user->id : $userId;
+
+        $reports = $this->buildReportListQuery($user, $userId, $status)
+            ->whereIn('id', $validated['report_ids'])
+            ->with([
+                'departmentAddressFrom',
+                'sectionAddressFrom',
+                'issueCategory',
+                'reportedBy',
+            ])
+            ->latest()
+            ->get();
+
+        if ($reports->isEmpty()) {
+            return back()->withErrors([
+                'report_ids' => 'No selected reports are available for export.',
+            ]);
+        }
+
+        $filename = 'selected_reports_' . now()->format('Y-m-d') . '.xls';
+
+        return $this->downloadReportWorkbook($reports, $filename, $userId, $status, 'Selected Reports Export');
+    }
+
+    protected function downloadReportWorkbook($reports, string $filename, $userId, $status, string $exportType): StreamedResponse
+    {
+        $assignedUserIds = $reports
+            ->flatMap(fn (Report $report) => $report->assigned_users ?? [])
+            ->filter()
+            ->unique()
+            ->values();
+
+        $assignedUsers = User::whereIn('id', $assignedUserIds)->pluck('full_name', 'id');
+        $statusCounts = $reports
+            ->groupBy(fn (Report $report) => strtolower((string) $report->status))
+            ->map->count();
+        $scopeLabel = $userId === 'all' ? 'All Users' : $this->exportUserLabel($userId);
+        $statusLabel = filled($status) && $status !== 'all' ? strtoupper((string) $status) : 'ALL STATUSES';
+
+        return response()->streamDownload(function () use ($reports, $assignedUsers, $statusCounts, $scopeLabel, $statusLabel, $exportType) {
             echo '<?xml version="1.0" encoding="UTF-8"?>';
             echo '<?mso-application progid="Excel.Sheet"?>';
             echo '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" ';
+            echo 'xmlns:o="urn:schemas-microsoft-com:office:office" ';
+            echo 'xmlns:x="urn:schemas-microsoft-com:office:excel" ';
             echo 'xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">';
+            $this->writeExcelStyles();
             echo '<Worksheet ss:Name="Reports"><Table>';
+            $this->writeExcelColumns([90, 135, 230, 180, 170, 340, 210, 95, 125, 135]);
 
-            $headers = [
+            $this->writeExcelRow(['MIS Support Reports'], 'Title', 10);
+            $this->writeExcelRow([$exportType], 'Subtitle', 10);
+            $this->writeExcelRow([
                 'Report ID',
                 'Date Reported',
                 'From Department / Section',
@@ -96,9 +153,7 @@ class ReportController extends Controller
                 'Status',
                 'Contact Number',
                 'Last Updated',
-            ];
-
-            $this->writeExcelRow($headers);
+            ], 'Header');
 
             foreach ($reports as $report) {
                 $assignedTo = collect($report->assigned_users ?? [])
@@ -115,9 +170,9 @@ class ReportController extends Controller
                     $report->issue,
                     $assignedTo ?: 'Unassigned',
                     strtoupper((string) $report->status),
-                    $report->contact_number,
+                    $report->contact_number ?: 'N/A',
                     optional($report->updated_at)?->format('Y-m-d H:i:s'),
-                ]);
+                ], 'Data');
             }
 
             echo '</Table></Worksheet></Workbook>';
@@ -198,12 +253,39 @@ class ReportController extends Controller
         return User::find($userId)?->full_name ?: 'user-' . $userId;
     }
 
-    protected function writeExcelRow(array $cells): void
+    protected function writeExcelStyles(): void
+    {
+        echo '<Styles>';
+        echo '<Style ss:ID="Default" ss:Name="Normal"><Alignment ss:Vertical="Top" ss:WrapText="1"/><Font ss:FontName="Calibri" ss:Size="11"/></Style>';
+        echo '<Style ss:ID="Title"><Font ss:FontName="Calibri" ss:Size="18" ss:Bold="1" ss:Color="#1F4E78"/><Alignment ss:Vertical="Center"/></Style>';
+        echo '<Style ss:ID="Subtitle"><Font ss:FontName="Calibri" ss:Size="12" ss:Bold="1" ss:Color="#44546A"/><Alignment ss:Vertical="Center"/></Style>';
+        echo '<Style ss:ID="Meta"><Font ss:FontName="Calibri" ss:Size="10" ss:Color="#404040"/><Interior ss:Color="#F2F6FA" ss:Pattern="Solid"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#D9E2F3"/></Borders></Style>';
+        echo '<Style ss:ID="Header"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1F4E78" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="2" ss:Color="#17365D"/></Borders></Style>';
+        echo '<Style ss:ID="Data"><Font ss:FontName="Calibri" ss:Size="10" ss:Color="#1F1F1F"/><Alignment ss:Vertical="Top" ss:WrapText="1"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E7E6E6"/></Borders></Style>';
+        echo '<Style ss:ID="Spacer"><Font ss:Size="6"/></Style>';
+        echo '</Styles>';
+    }
+
+    protected function writeExcelColumns(array $widths): void
+    {
+        foreach ($widths as $width) {
+            echo '<Column ss:AutoFitWidth="0" ss:Width="' . e((string) $width) . '"/>';
+        }
+    }
+
+    protected function writeExcelRow(array $cells, string $style = 'Data', ?int $mergeAcross = null): void
     {
         echo '<Row>';
 
-        foreach ($cells as $cell) {
-            echo '<Cell><Data ss:Type="String">' . e((string) ($cell ?? '')) . '</Data></Cell>';
+        if (empty($cells)) {
+            echo '<Cell ss:StyleID="' . e($style) . '"><Data ss:Type="String"></Data></Cell>';
+            echo '</Row>';
+            return;
+        }
+
+        foreach ($cells as $index => $cell) {
+            $merge = $index === 0 && $mergeAcross !== null ? ' ss:MergeAcross="' . e((string) $mergeAcross) . '"' : '';
+            echo '<Cell ss:StyleID="' . e($style) . '"' . $merge . '><Data ss:Type="String">' . e((string) ($cell ?? '')) . '</Data></Cell>';
         }
 
         echo '</Row>';

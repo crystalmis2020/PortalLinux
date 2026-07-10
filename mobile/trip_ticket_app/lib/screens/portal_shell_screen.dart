@@ -141,13 +141,15 @@ class _PortalShellScreenState extends State<PortalShellScreen> {
         index: _selectedIndex,
         children: pages,
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: (index) {
-          setState(() => _selectedIndex = index);
-        },
-        destinations: destinations,
-      ),
+      bottomNavigationBar: destinations.length < 2
+          ? null
+          : NavigationBar(
+              selectedIndex: _selectedIndex,
+              onDestinationSelected: (index) {
+                setState(() => _selectedIndex = index);
+              },
+              destinations: destinations,
+            ),
     );
   }
 

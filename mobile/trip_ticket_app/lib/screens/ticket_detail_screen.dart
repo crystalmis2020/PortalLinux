@@ -22,6 +22,8 @@ class TicketDetailScreen extends StatefulWidget {
 
 class _TicketDetailScreenState extends State<TicketDetailScreen> {
   final _date = DateFormat('MMM d, yyyy h:mm a');
+  final _shortDate = DateFormat('MMM d, yyyy');
+  final _time = DateFormat('h:mm a');
   TripTicket? _ticket;
   bool _loading = true;
   bool _saving = false;
@@ -176,67 +178,10 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
       children: [
-        Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: PortalColors.brandDark,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Text(
-                      ticket.displayNumber,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  StatusChip(status: ticket.status),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Text(
-                ticket.destination ?? 'No destination',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              if (ticket.requestedStart != null) ...[
-                const SizedBox(height: 6),
-                Text(
-                  _date.format(ticket.requestedStart!),
-                  style: const TextStyle(color: Color(0xffcbd5e1)),
-                ),
-              ],
-            ],
-          ),
-        ),
+        _heroCard(ticket),
         if (_error != null) ...[
           const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xfffff1f3),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xffffcdd6)),
-            ),
-            child: Text(
-              _error!,
-              style: const TextStyle(
-                color: Color(0xff9f1239),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
+          _errorPanel(_error!),
         ],
         const SizedBox(height: 14),
         _section(
@@ -244,57 +189,147 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           title: 'Requester',
           children: [
             _row('Name', ticket.requesterName),
-            _row(
-              'Department / Section',
-              [ticket.departmentName, ticket.sectionName]
-                  .whereType<String>()
-                  .where((value) => value.isNotEmpty)
-                  .join(' / '),
-            ),
-            _row('Contact Number', ticket.contactNumber),
+            _row('Department', ticket.departmentName),
+            _row('Section', ticket.sectionName),
+            _row('Contact', ticket.contactNumber),
           ],
         ),
         const SizedBox(height: 12),
         _section(
           icon: Icons.route_outlined,
-          title: 'Trip Details',
+          title: 'Request Details',
           children: [
             _row('Destination', ticket.destination),
+            _row('Schedule', _schedule(ticket)),
             _row('Purpose', ticket.purpose),
-            _row('Passengers / Personnel', ticket.passengers),
-            _row('Requested Departure', _format(ticket.requestedStart)),
-            _row('Requested Return', _format(ticket.requestedEnd)),
+            _row('Passengers', ticket.passengers),
           ],
         ),
         const SizedBox(height: 12),
         _section(
-          icon: Icons.local_shipping_outlined,
-          title: 'Operational Details',
+          icon: Icons.assignment_ind_outlined,
+          title: 'Assignment',
           children: [
             _row('Vehicle', ticket.vehicleDetails, pending: true),
             _row('Driver', ticket.driverName, pending: true),
+            _row('Encoded By', ticket.encoderName, pending: true),
+            _row('Encoder Remarks', ticket.remarks),
+            _row('Approval Remarks', ticket.approvalRemarks),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _section(
+          icon: Icons.security_outlined,
+          title: 'Gatekeeper Records',
+          subtitle: 'Actual trip movement is recorded by the gatekeeper.',
+          children: [
             _row(
-              'Actual Departure',
+              'Departure',
               _format(ticket.actualDeparture),
               pending: true,
             ),
             _row(
-              'Actual Return',
+              'Return',
               _format(ticket.actualReturn),
               pending: true,
             ),
-            _row('Encoded By', ticket.encoderName, pending: true),
-            _row('Encoder Remarks', ticket.remarks),
-            _row('Approval Remarks', ticket.approvalRemarks),
+            _row('Departure Remarks', ticket.gatekeeperDepartureRemarks),
+            _row('Return Remarks', ticket.gatekeeperReturnRemarks),
           ],
         ),
       ],
     );
   }
 
+  Widget _heroCard(TripTicket ticket) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: PortalColors.brandDark,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  ticket.displayNumber,
+                  style: const TextStyle(
+                    color: Color(0xffd8eadc),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              StatusChip(status: ticket.status),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            ticket.destination ?? 'No destination',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              height: 1.18,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _heroLine(Icons.event_outlined, _schedule(ticket)),
+          if (ticket.requesterName != null && ticket.requesterName!.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _heroLine(Icons.person_outline, ticket.requesterName!),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _heroLine(IconData icon, String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: const Color(0xffcbd5e1)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              color: Color(0xffe2e8f0),
+              fontWeight: FontWeight.w600,
+              height: 1.35,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _errorPanel(String message) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xfffff1f3),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xffffcdd6)),
+      ),
+      child: Text(
+        message,
+        style: const TextStyle(
+          color: Color(0xff9f1239),
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
   Widget _section({
     required IconData icon,
     required String title,
+    String? subtitle,
     required List<Widget> children,
   }) {
     return Container(
@@ -312,7 +347,25 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
               children: [
                 Icon(icon, size: 20, color: PortalColors.primary),
                 const SizedBox(width: 9),
-                Text(title, style: Theme.of(context).textTheme.titleMedium),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: Theme.of(context).textTheme.titleMedium),
+                      if (subtitle != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          style: const TextStyle(
+                            color: PortalColors.muted,
+                            fontSize: 12,
+                            height: 1.3,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -375,12 +428,10 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         ),
         child: Row(
           children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _saving ? null : () => _confirmAction('return'),
-                icon: const Icon(Icons.undo, size: 18),
-                label: const Text('Return'),
-              ),
+            IconButton.outlined(
+              tooltip: 'Return for correction',
+              onPressed: _saving ? null : () => _confirmAction('return'),
+              icon: const Icon(Icons.undo, color: Color(0xffb54708)),
             ),
             const SizedBox(width: 8),
             IconButton.outlined(
@@ -409,6 +460,34 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         ),
       ),
     );
+  }
+
+
+  String _schedule(TripTicket ticket) {
+    final start = ticket.requestedStart;
+    final end = ticket.requestedEnd;
+
+    if (start == null && end == null) {
+      return 'Schedule unavailable';
+    }
+
+    if (start != null && end != null) {
+      final sameDay = start.year == end.year &&
+          start.month == end.month &&
+          start.day == end.day;
+
+      if (sameDay) {
+        return '${_shortDate.format(start)} · ${_time.format(start)} - ${_time.format(end)}';
+      }
+
+      return '${_shortDate.format(start)} ${_time.format(start)} - ${_shortDate.format(end)} ${_time.format(end)}';
+    }
+
+    if (start != null) {
+      return '${_shortDate.format(start)} · ${_time.format(start)}';
+    }
+
+    return '${_shortDate.format(end!)} · ${_time.format(end)}';
   }
 
   String? _format(DateTime? value) {

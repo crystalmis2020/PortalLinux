@@ -321,31 +321,57 @@ class _ApprovalListScreenState extends State<ApprovalListScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child: Text(
-                      ticket.displayNumber,
-                      style: Theme.of(context).textTheme.titleMedium,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          ticket.displayNumber,
+                          style: const TextStyle(
+                            color: PortalColors.muted,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          ticket.destination ?? 'No destination',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                      ],
                     ),
                   ),
-                  const StatusChip(status: 'for_approval'),
+                  const SizedBox(width: 10),
+                  StatusChip(status: ticket.status),
                 ],
               ),
               const SizedBox(height: 14),
-              _iconLine(
-                Icons.location_on_outlined,
-                ticket.destination ?? 'No destination',
-                strong: true,
+              _infoBlock(
+                icon: Icons.person_outline,
+                label: 'Requester',
+                value: ticket.requesterName ?? 'Requester unavailable',
               ),
-              const SizedBox(height: 9),
-              _iconLine(
-                Icons.person_outline,
-                ticket.requesterName ?? 'Requester unavailable',
+              const SizedBox(height: 10),
+              _infoBlock(
+                icon: Icons.event_outlined,
+                label: 'Requested Schedule',
+                value: _schedule(ticket),
               ),
-              if (ticket.requestedStart != null) ...[
-                const SizedBox(height: 9),
-                _iconLine(
-                  Icons.schedule,
-                  '${_date.format(ticket.requestedStart!)} at '
-                  '${_time.format(ticket.requestedStart!)}',
+              const SizedBox(height: 10),
+              _infoBlock(
+                icon: Icons.business_outlined,
+                label: 'Department',
+                value: ticket.departmentName ?? 'Department unavailable',
+              ),
+              if (ticket.purpose != null && ticket.purpose!.trim().isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  ticket.purpose!,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xff475569),
+                    height: 1.4,
+                  ),
                 ),
               ],
               const Divider(height: 26),
@@ -353,7 +379,9 @@ class _ApprovalListScreenState extends State<ApprovalListScreen> {
                 children: [
                   Expanded(
                     child: Text(
-                      ticket.departmentName ?? 'Department unavailable',
+                      ticket.sectionName?.isNotEmpty == true
+                          ? ticket.sectionName!
+                          : 'Tap to review request details',
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: PortalColors.muted,
@@ -385,24 +413,77 @@ class _ApprovalListScreenState extends State<ApprovalListScreen> {
     );
   }
 
-  Widget _iconLine(IconData icon, String text, {bool strong = false}) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 18, color: PortalColors.muted),
-        const SizedBox(width: 9),
-        Expanded(
-          child: Text(
-            text,
-            style: TextStyle(
-              color: strong ? PortalColors.brandDark : const Color(0xff475569),
-              fontWeight: strong ? FontWeight.w700 : FontWeight.w500,
-              height: 1.35,
+  Widget _infoBlock({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xfff8fafc),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: PortalColors.border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: PortalColors.primary),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: PortalColors.muted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: Color(0xff334155),
+                    fontWeight: FontWeight.w700,
+                    height: 1.35,
+                  ),
+                ),
+              ],
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
+  }
+
+  String _schedule(TripTicket ticket) {
+    final start = ticket.requestedStart;
+    final end = ticket.requestedEnd;
+
+    if (start == null && end == null) {
+      return 'Schedule unavailable';
+    }
+
+    if (start != null && end != null) {
+      final sameDay = start.year == end.year &&
+          start.month == end.month &&
+          start.day == end.day;
+
+      if (sameDay) {
+        return '${_date.format(start)} · ${_time.format(start)} - ${_time.format(end)}';
+      }
+
+      return '${_date.format(start)} ${_time.format(start)} - ${_date.format(end)} ${_time.format(end)}';
+    }
+
+    if (start != null) {
+      return '${_date.format(start)} · ${_time.format(start)}';
+    }
+
+    return '${_date.format(end!)} · ${_time.format(end)}';
   }
 }
 

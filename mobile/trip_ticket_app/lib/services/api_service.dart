@@ -155,12 +155,30 @@ class ApiService {
     return TripTicket.fromJson(data['ticket'] as Map<String, dynamic>);
   }
 
-  Future<TripTicket> gatekeeperRecordDeparture(int id, String remarks) {
-    return _gatekeeperAction(id, 'departure', remarks);
+  Future<TripTicket> gatekeeperRecordDeparture(
+    int id,
+    String remarks,
+    DateTime actualDeparture,
+  ) {
+    return _gatekeeperAction(
+      id,
+      'departure',
+      remarks,
+      actualDeparture,
+    );
   }
 
-  Future<TripTicket> gatekeeperRecordReturn(int id, String remarks) {
-    return _gatekeeperAction(id, 'return', remarks);
+  Future<TripTicket> gatekeeperRecordReturn(
+    int id,
+    String remarks,
+    DateTime actualReturn,
+  ) {
+    return _gatekeeperAction(
+      id,
+      'return',
+      remarks,
+      actualReturn,
+    );
   }
 
   Future<List<TripTicket>> _gatekeeperTickets(
@@ -187,12 +205,20 @@ class ApiService {
     int id,
     String action,
     String remarks,
+    DateTime actualDateTime,
   ) async {
+    final dateTimeField = action == 'departure'
+        ? 'actual_departure_datetime'
+        : 'actual_return_datetime';
+
     final response = await _request(
       _client.post(
         _uri('/api/trip-tickets/gatekeeper/$id/$action'),
         headers: await _authHeaders(),
-        body: jsonEncode({'remarks': remarks}),
+        body: jsonEncode({
+          'remarks': remarks,
+          dateTimeField: actualDateTime.toIso8601String(),
+        }),
       ),
     );
 

@@ -195,12 +195,12 @@ class _GatekeeperScreenState extends State<GatekeeperScreen> {
   }
 
   Future<void> _record(TripTicket ticket, String action) async {
-    final remarks = await showDialog<String>(
+    final result = await showDialog<_GatekeeperRecordResult>(
       context: context,
       builder: (_) => _GatekeeperRemarksDialog(action: action),
     );
 
-    if (remarks == null) {
+    if (result == null) {
       return;
     }
 
@@ -210,11 +210,22 @@ class _GatekeeperScreenState extends State<GatekeeperScreen> {
     });
 
     try {
-      if (action == 'departure') {
-        await widget.api.gatekeeperRecordDeparture(ticket.id, remarks);
-      } else {
-        await widget.api.gatekeeperRecordReturn(ticket.id, remarks);
+      final updatedTicket = action == 'departure'
+          ? await widget.api.gatekeeperRecordDeparture(
+              ticket.id,
+              result.remarks,
+              result.actualDateTime,
+            )
+          : await widget.api.gatekeeperRecordReturn(
+              ticket.id,
+              result.remarks,
+              result.actualDateTime,
+            );
+
+      if (_tab == 2) {
+        _replaceSearchResult(updatedTicket);
       }
+
       await _loadLists();
       if (!mounted) {
         return;
@@ -378,6 +389,15 @@ class _GatekeeperScreenState extends State<GatekeeperScreen> {
     );
   }
 
+  void _replaceSearchResult(TripTicket updatedTicket) {
+    final index = _searchResults.indexWhere((ticket) => ticket.id == updatedTicket.id);
+    if (index == -1) {
+      return;
+    }
+
+    _searchResults[index] = updatedTicket;
+  }
+
   Widget _tabContent() {
     switch (_tab) {
       case 1:
@@ -472,13 +492,31 @@ class _GatekeeperScreenState extends State<GatekeeperScreen> {
               child: _TicketCard(
                 ticket: ticket,
                 date: _date,
-                onRecord: action == null ? null : () => _record(ticket, action),
+                onRecord: _recordActionFor(ticket, action) == null
+                    ? null
+                    : () => _record(ticket, _recordActionFor(ticket, action)!),
               ),
             ),
           )
           .toList(),
     );
   }
+}
+
+String? _recordActionFor(TripTicket ticket, String? listAction) {
+  if (listAction != null) {
+    return listAction;
+  }
+
+  if (ticket.canRecordDeparture) {
+    return 'departure';
+  }
+
+  if (ticket.canRecordReturn) {
+    return 'return';
+  }
+
+  return null;
 }
 
 class _TicketCard extends StatelessWidget {
@@ -600,6 +638,16 @@ class _TicketCard extends StatelessWidget {
   }
 }
 
+class _GatekeeperRecordResult {
+  const _GatekeeperRecordResult({
+    required this.actualDateTime,
+    required this.remarks,
+  });
+
+  final DateTime actualDateTime;
+  final String remarks;
+}
+
 class _GatekeeperRemarksDialog extends StatefulWidget {
   const _GatekeeperRemarksDialog({required this.action});
 
@@ -612,6 +660,14 @@ class _GatekeeperRemarksDialog extends StatefulWidget {
 
 class _GatekeeperRemarksDialogState extends State<_GatekeeperRemarksDialog> {
   final _remarks = TextEditingController();
+  final _dateTimeFormat = DateFormat('MMM d, yyyy h:mm a');
+  late DateTime _actualDateTime;
+
+  @override
+  void initState() {
+    super.initState();
+    _actualDateTime = DateTime.now();
+  }
 
   @override
   void dispose() {
@@ -619,9 +675,43 @@ class _GatekeeperRemarksDialogState extends State<_GatekeeperRemarksDialog> {
     super.dispose();
   }
 
+  Future<void> _changeDateTime() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _actualDateTime,
+      firstDate: DateTime.now().subtract(const Duration(days: 30)),
+      lastDate: DateTime.now().add(const Duration(days: 30)),
+    );
+
+    if (date == null || !mounted) {
+      return;
+    }
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_actualDateTime),
+    );
+
+    if (time == null) {
+      return;
+    }
+
+    setState(() {
+      _actualDateTime = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        time.hour,
+        time.minute,
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDeparture = widget.action == 'departure';
+    final actionLabel = isDeparture ? 'departure' : 'return';
+
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       title: Row(
@@ -633,14 +723,62 @@ class _GatekeeperRemarksDialogState extends State<_GatekeeperRemarksDialog> {
           ),
         ],
       ),
-      content: TextField(
-        controller: _remarks,
-        minLines: 3,
-        maxLines: 5,
-        decoration: const InputDecoration(
-          labelText: 'Remarks optional',
-          alignLabelWithHint: true,
-        ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Actual $actionLabel time',
+            style: const TextStyle(
+              color: PortalColors.muted,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: _changeDateTime,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                border: Border.all(color: PortalColors.border),
+                borderRadius: BorderRadius.circular(8),
+                color: const Color(0xfff8fafc),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.event_outlined, color: PortalColors.primary),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _dateTimeFormat.format(_actualDateTime),
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  const Text(
+                    'Change',
+                    style: TextStyle(
+                      color: PortalColors.primary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _remarks,
+            minLines: 3,
+            maxLines: 5,
+            decoration: const InputDecoration(
+              labelText: 'Remarks optional',
+              alignLabelWithHint: true,
+            ),
+          ),
+        ],
       ),
       actions: [
         TextButton(
@@ -648,7 +786,12 @@ class _GatekeeperRemarksDialogState extends State<_GatekeeperRemarksDialog> {
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: () => Navigator.of(context).pop(_remarks.text.trim()),
+          onPressed: () => Navigator.of(context).pop(
+            _GatekeeperRecordResult(
+              actualDateTime: _actualDateTime,
+              remarks: _remarks.text.trim(),
+            ),
+          ),
           child: const Text('Confirm'),
         ),
       ],

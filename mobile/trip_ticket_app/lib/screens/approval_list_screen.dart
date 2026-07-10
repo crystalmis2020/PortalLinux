@@ -26,7 +26,6 @@ class ApprovalListScreen extends StatefulWidget {
 
 class _ApprovalListScreenState extends State<ApprovalListScreen> {
   final _date = DateFormat('MMM d, yyyy');
-  final _time = DateFormat('h:mm a');
   final _search = TextEditingController();
   List<TripTicket> _tickets = [];
   bool _loading = true;
@@ -473,17 +472,17 @@ class _ApprovalListScreenState extends State<ApprovalListScreen> {
           start.day == end.day;
 
       if (sameDay) {
-        return '${_date.format(start)} · ${_time.format(start)} - ${_time.format(end)}';
+        return _date.format(start);
       }
 
-      return '${_date.format(start)} ${_time.format(start)} - ${_date.format(end)} ${_time.format(end)}';
+      return '${_date.format(start)} - ${_date.format(end)}';
     }
 
     if (start != null) {
-      return '${_date.format(start)} · ${_time.format(start)}';
+      return _date.format(start);
     }
 
-    return '${_date.format(end!)} · ${_time.format(end)}';
+    return _date.format(end!);
   }
 }
 

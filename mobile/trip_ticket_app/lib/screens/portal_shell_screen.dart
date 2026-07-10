@@ -42,7 +42,7 @@ class _PortalShellScreenState extends State<PortalShellScreen> {
           session: widget.session,
           onUnauthorized: widget.onLogout,
         ),
-      const MessHallScreen(),
+      if (!widget.session.canGatekeepTripTickets) const MessHallScreen(),
     ];
 
     final destinations = <NavigationDestination>[
@@ -58,11 +58,12 @@ class _PortalShellScreenState extends State<PortalShellScreen> {
           selectedIcon: Icon(Icons.local_shipping),
           label: 'Gatekeeper',
         ),
-      const NavigationDestination(
-        icon: Icon(Icons.restaurant_outlined),
-        selectedIcon: Icon(Icons.restaurant),
-        label: 'Mess Hall',
-      ),
+      if (!widget.session.canGatekeepTripTickets)
+        const NavigationDestination(
+          icon: Icon(Icons.restaurant_outlined),
+          selectedIcon: Icon(Icons.restaurant),
+          label: 'Mess Hall',
+        ),
     ];
 
     if (_selectedIndex >= pages.length) {

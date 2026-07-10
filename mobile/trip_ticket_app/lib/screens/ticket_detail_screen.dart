@@ -21,9 +21,7 @@ class TicketDetailScreen extends StatefulWidget {
 }
 
 class _TicketDetailScreenState extends State<TicketDetailScreen> {
-  final _date = DateFormat('MMM d, yyyy h:mm a');
   final _shortDate = DateFormat('MMM d, yyyy');
-  final _time = DateFormat('h:mm a');
   TripTicket? _ticket;
   bool _loading = true;
   bool _saving = false;
@@ -215,26 +213,6 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
             _row('Encoded By', ticket.encoderName, pending: true),
             _row('Encoder Remarks', ticket.remarks),
             _row('Approval Remarks', ticket.approvalRemarks),
-          ],
-        ),
-        const SizedBox(height: 12),
-        _section(
-          icon: Icons.security_outlined,
-          title: 'Gatekeeper Records',
-          subtitle: 'Actual trip movement is recorded by the gatekeeper.',
-          children: [
-            _row(
-              'Departure',
-              _format(ticket.actualDeparture),
-              pending: true,
-            ),
-            _row(
-              'Return',
-              _format(ticket.actualReturn),
-              pending: true,
-            ),
-            _row('Departure Remarks', ticket.gatekeeperDepartureRemarks),
-            _row('Return Remarks', ticket.gatekeeperReturnRemarks),
           ],
         ),
       ],
@@ -477,21 +455,17 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           start.day == end.day;
 
       if (sameDay) {
-        return '${_shortDate.format(start)} · ${_time.format(start)} - ${_time.format(end)}';
+        return _shortDate.format(start);
       }
 
-      return '${_shortDate.format(start)} ${_time.format(start)} - ${_shortDate.format(end)} ${_time.format(end)}';
+      return '${_shortDate.format(start)} - ${_shortDate.format(end)}';
     }
 
     if (start != null) {
-      return '${_shortDate.format(start)} · ${_time.format(start)}';
+      return _shortDate.format(start);
     }
 
-    return '${_shortDate.format(end!)} · ${_time.format(end)}';
-  }
-
-  String? _format(DateTime? value) {
-    return value == null ? null : _date.format(value);
+    return _shortDate.format(end!);
   }
 }
 

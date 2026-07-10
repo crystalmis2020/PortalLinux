@@ -57,7 +57,7 @@ class _LoginScreenState extends State<LoginScreen> {
         }
 
         setState(() {
-          _error = 'This account is not allowed to use mobile trip tickets.';
+          _error = 'This account is not allowed to use the mobile support portal.';
           _loading = false;
         });
         return;
@@ -108,7 +108,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           PortalBrand(light: true),
                           SizedBox(height: 36),
                           Text(
-                            'Mobile access for\nfield operations.',
+                            'CSCI Support Portal\nMobile',
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 28,
@@ -119,7 +119,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           SizedBox(height: 10),
                           Text(
-                            'Review approvals and record gate departures.',
+                            'Access mobile support workflows in one place.',
                             style: TextStyle(
                               color: Color(0xffcbd5e1),
                               height: 1.45,
@@ -144,7 +144,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               const SizedBox(height: 5),
                               const Text(
-                                'Use your Support Portal trip ticket account.',
+                                'Use your CSCI Support Portal account.',
                                 style: TextStyle(color: PortalColors.muted),
                               ),
                               const SizedBox(height: 24),
@@ -244,7 +244,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               const SizedBox(height: 24),
                               const Text(
-                                'CSCI MIS  •  Support Portal',
+                                'CSCI Support Portal Mobile',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   color: PortalColors.muted,

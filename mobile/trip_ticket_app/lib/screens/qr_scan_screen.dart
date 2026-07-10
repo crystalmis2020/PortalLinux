@@ -38,6 +38,7 @@ class _QrScanScreenState extends State<QrScanScreen> {
     }
 
     _handled = true;
+    _controller.stop();
     Navigator.of(context).pop(value);
   }
 
@@ -49,6 +50,24 @@ class _QrScanScreenState extends State<QrScanScreen> {
     setState(() {
       _error = 'Camera scanner could not start. Check camera permission.';
     });
+  }
+
+  String _scannerErrorTitle(MobileScannerException error) {
+    return switch (error.errorCode) {
+      MobileScannerErrorCode.permissionDenied => 'Camera permission denied',
+      MobileScannerErrorCode.unsupported => 'Camera scanner unsupported',
+      _ => 'Camera scanner could not start',
+    };
+  }
+
+  String _scannerErrorDetails(MobileScannerException error) {
+    final details = error.errorDetails;
+    return [
+      'Plugin code: ${error.errorCode.name}',
+      if (details?.code case final String code) 'Native code: $code',
+      if (details?.message case final String message) message,
+      if (details?.details case final Object extra) extra.toString(),
+    ].join('\n');
   }
 
   @override
@@ -77,6 +96,12 @@ class _QrScanScreenState extends State<QrScanScreen> {
         children: [
           MobileScanner(
             controller: _controller,
+            errorBuilder: (_, error) {
+              return _ScannerError(
+                title: _scannerErrorTitle(error),
+                details: _scannerErrorDetails(error),
+              );
+            },
             onDetect: _handleDetect,
             onDetectError: _handleError,
           ),
@@ -139,6 +164,58 @@ class _QrScanScreenState extends State<QrScanScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ScannerError extends StatelessWidget {
+  const _ScannerError({
+    required this.title,
+    required this.details,
+  });
+
+  final String title;
+  final String details;
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: Colors.black,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.no_photography_outlined,
+                color: Colors.white70,
+                size: 44,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                details,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 12,
+                  height: 1.35,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

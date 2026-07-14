@@ -275,10 +275,6 @@
                     <div class="field-label">Encoded By</div>
                     <div class="field-value">{{ $ticket->encoder?->full_name ?? 'N/A' }}</div>
                 </div>
-                <div class="span-2">
-                    <div class="field-label">Approved By</div>
-                    <div class="field-value">{{ $ticket->approver?->full_name ?? 'N/A' }}</div>
-                </div>
             </div>
         </section>
 

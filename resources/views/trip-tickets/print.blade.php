@@ -272,7 +272,7 @@
             <h2 class="section-title">Approval</h2>
             <div class="grid">
                 <div class="span-2">
-                    <div class="field-label">Encoded By</div>
+                    <div class="field-label">Reviewed By</div>
                     <div class="field-value">{{ $ticket->encoder?->full_name ?? 'N/A' }}</div>
                 </div>
             </div>

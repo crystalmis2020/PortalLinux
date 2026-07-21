@@ -40,7 +40,8 @@
 
         .document {
             width: 210mm;
-            min-height: 148mm;
+            height: 148.5mm;
+            min-height: 148.5mm;
             margin: 0 auto 18px;
             padding: 8mm 9mm;
             background: #fff;
@@ -181,11 +182,66 @@
             .toolbar { display: none; }
             .document {
                 width: 210mm;
+                height: 148mm;
                 min-height: 148mm;
                 margin: 0;
                 border: 0;
                 page-break-after: avoid;
+                overflow: hidden;
             }
+
+            .header {
+                grid-template-columns: minmax(0, 1fr) 22mm;
+                gap: 4mm;
+                padding-bottom: 2mm;
+            }
+            .qr-box svg { width: 20mm; height: 20mm; }
+            .section { margin-top: 2mm; }
+            .section-title { margin-bottom: 1mm; padding-bottom: 0.5mm; }
+            .grid { gap: 1.2mm 3mm; }
+            .field-value { min-height: 11px; }
+            .field-block { min-height: 12px; max-height: 20px; padding: 1px 3px; }
+            .signatures { gap: 6mm; margin-top: 3mm; }
+            .signature-line { min-height: 8mm; }
+            .signature-label { margin-top: 0.5mm; }
+            .document > .section h2[style] { margin-bottom: 3px !important; }
+            .document > .section div[style*="display: flex"] { gap: 6px !important; }
+            .document > .section div[style*="min-height: 60px"] {
+                min-height: 34px !important;
+                padding: 4px !important;
+            }
+            .document > .section div[style*="margin-bottom: 12px"] { margin-bottom: 3px !important; }
+            .document > .section div[style*="height: 20px"] { height: 10px !important; }
+
+        }
+
+        .odometer-row {
+        display: grid;
+        grid-template-columns: 28mm 1fr 1fr;
+        gap: 5mm;
+        align-items: end;
+        }
+
+        .odometer-title {
+        font-size: 9px;
+        font-weight: 700;
+        text-transform: uppercase;
+        }
+
+        .odometer-field {
+        display: flex;
+        align-items: end;
+        gap: 4px;
+        }
+
+        .odometer-field .field-label {
+        white-space: nowrap;
+        }
+
+        .odometer-line {
+        flex: 1;
+        min-height: 15px;
+        border-bottom: 1px solid #111827;
         }
     </style>
 </head>
@@ -237,14 +293,6 @@
                     <div class="field-label">Destination</div>
                     <div class="field-value">{{ $ticket->destination ?: 'N/A' }}</div>
                 </div>
-                <div>
-                    <div class="field-label">Departure</div>
-                    <div class="field-value">{{ $ticket->requested_start_datetime?->format('M d, Y') ?? 'N/A' }}</div>
-                </div>
-                <div>
-                    <div class="field-label">Return</div>
-                    <div class="field-value">{{ $ticket->requested_end_datetime?->format('M d, Y') ?? 'N/A' }}</div>
-                </div>
                 <div class="span-2">
                     <div class="field-label">Vehicle</div>
                     <div class="field-value">{{ $ticket->vehicle_details ?: ($ticket->vehicle ? trim($ticket->vehicle->plate_number . ' - ' . $ticket->vehicle->description, ' -') : 'N/A') }}</div>
@@ -268,30 +316,26 @@
             </div>
         </section>
 
-        <section class="section">
-            <h2 class="section-title">Approval</h2>
-            <div class="grid">
-                <div class="span-2">
-                    <div class="field-label">Reviewed By</div>
-                    <div class="field-value">{{ $ticket->encoder?->full_name ?? 'N/A' }}</div>
-                </div>
-            </div>
-        </section>
+    <section class="section">
+        <h2 class="section-title" style="text-align: center; margin-bottom: 10px;">
+            Vehicle Odometer Record
+        </h2>
 
-        <section class="signatures">
-            <div>
-                <div class="signature-line">{{ $ticket->requester?->full_name ?? '' }}</div>
-                <div class="signature-label">Requested By</div>
+        <div style="display: flex; gap: 12px;">
+
+            <div style="flex: 1; border: 1px solid #000; padding: 10px; min-height: 60px;">
+                <div style="font-weight: bold; margin-bottom: 12px;">Departure:</div>
+                <div style="border-bottom: 1px solid #000; height: 20px;"></div>
             </div>
-            <div>
-                <div class="signature-line">{{ $ticket->driver_name ?: ($ticket->driver?->name ?? '') }}</div>
-                <div class="signature-label">Driver</div>
+
+            <div style="flex: 1; border: 1px solid #000; padding: 10px; min-height: 60px;">
+                <div style="font-weight: bold; margin-bottom: 12px;">Return:</div>
+                <div style="border-bottom: 1px solid #000; height: 20px;"></div>
             </div>
-            <div>
-                <div class="signature-line">{{ $ticket->approver?->full_name ?? '' }}</div>
-                <div class="signature-label">Approved By</div>
-            </div>
-        </section>
+
+        </div>
+    </section>
+</section>
     </main>
 </body>
 </html>

@@ -721,6 +721,7 @@ class _GatekeeperRemarksDialogState extends State<_GatekeeperRemarksDialog> {
     final actionLabel = isDeparture ? 'departure' : 'return';
 
     return AlertDialog(
+      scrollable: true,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       title: Row(
         children: [

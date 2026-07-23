@@ -159,12 +159,14 @@ class ApiService {
     int id,
     String remarks,
     DateTime actualDeparture,
+    double odometer,
   ) {
     return _gatekeeperAction(
       id,
       'departure',
       remarks,
       actualDeparture,
+      odometer,
     );
   }
 
@@ -172,12 +174,14 @@ class ApiService {
     int id,
     String remarks,
     DateTime actualReturn,
+    double odometer,
   ) {
     return _gatekeeperAction(
       id,
       'return',
       remarks,
       actualReturn,
+      odometer,
     );
   }
 
@@ -206,6 +210,7 @@ class ApiService {
     String action,
     String remarks,
     DateTime actualDateTime,
+    double odometer,
   ) async {
     final dateTimeField = action == 'departure'
         ? 'actual_departure_datetime'
@@ -218,6 +223,7 @@ class ApiService {
         body: jsonEncode({
           'remarks': remarks,
           dateTimeField: actualDateTime.toIso8601String(),
+          '${action}_odometer': odometer,
         }),
       ),
     );

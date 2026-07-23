@@ -111,6 +111,7 @@ class TripTicketGatekeeperController extends Controller
 
         $payload = $request->validate([
             'actual_departure_datetime' => ['nullable', 'date'],
+            'departure_odometer' => ['required', 'numeric', 'min:0'],
             'remarks' => ['nullable', 'string'],
         ]);
 
@@ -135,6 +136,7 @@ class TripTicketGatekeeperController extends Controller
 
             $ticket->update([
                 'actual_departure_datetime' => $actualDeparture,
+                'departure_odometer' => $payload['departure_odometer'],
                 'departure_recorded_by' => $request->user()->id,
                 'departure_recorded_at' => now(),
                 'gatekeeper_departure_remarks' => $payload['remarks'] ?? null,
@@ -150,6 +152,7 @@ class TripTicketGatekeeperController extends Controller
                 'remarks' => $payload['remarks'] ?? 'Gatekeeper recorded actual departure.',
                 'metadata' => [
                     'actual_departure_datetime' => $actualDeparture->toIso8601String(),
+                    'departure_odometer' => (float) $payload['departure_odometer'],
                 ],
             ]);
 
@@ -168,6 +171,7 @@ class TripTicketGatekeeperController extends Controller
 
         $payload = $request->validate([
             'actual_return_datetime' => ['nullable', 'date'],
+            'return_odometer' => ['required', 'numeric', 'min:0'],
             'remarks' => ['nullable', 'string'],
         ]);
 
@@ -194,10 +198,17 @@ class TripTicketGatekeeperController extends Controller
                 ], 422));
             }
 
+            if ($ticket->departure_odometer !== null && (float) $payload['return_odometer'] < (float) $ticket->departure_odometer) {
+                abort(response()->json([
+                    'message' => 'Return odometer cannot be lower than departure odometer.',
+                ], 422));
+            }
+
             $fromStatus = $ticket->status;
 
             $ticket->update([
                 'actual_return_datetime' => $actualReturn,
+                'return_odometer' => $payload['return_odometer'],
                 'return_recorded_by' => $request->user()->id,
                 'return_recorded_at' => now(),
                 'gatekeeper_return_remarks' => $payload['remarks'] ?? null,
@@ -213,6 +224,10 @@ class TripTicketGatekeeperController extends Controller
                 'remarks' => $payload['remarks'] ?? 'Gatekeeper recorded actual return.',
                 'metadata' => [
                     'actual_return_datetime' => $actualReturn->toIso8601String(),
+                    'return_odometer' => (float) $payload['return_odometer'],
+                    'distance_travelled_km' => $ticket->departure_odometer === null
+                        ? null
+                        : (float) $payload['return_odometer'] - (float) $ticket->departure_odometer,
                 ],
             ]);
 
@@ -306,7 +321,9 @@ class TripTicketGatekeeperController extends Controller
             'requested_start_datetime' => optional($ticket->requested_start_datetime)?->toIso8601String(),
             'requested_end_datetime' => optional($ticket->requested_end_datetime)?->toIso8601String(),
             'actual_departure_datetime' => optional($ticket->actual_departure_datetime)?->toIso8601String(),
+            'departure_odometer' => $ticket->departure_odometer,
             'actual_return_datetime' => optional($ticket->actual_return_datetime)?->toIso8601String(),
+            'return_odometer' => $ticket->return_odometer,
             'departure_recorded_at' => optional($ticket->departure_recorded_at)?->toIso8601String(),
             'return_recorded_at' => optional($ticket->return_recorded_at)?->toIso8601String(),
             'gatekeeper_departure_remarks' => $ticket->gatekeeper_departure_remarks,

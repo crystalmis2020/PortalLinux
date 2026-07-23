@@ -197,7 +197,7 @@ class _GatekeeperScreenState extends State<GatekeeperScreen> {
   Future<void> _record(TripTicket ticket, String action) async {
     final result = await showDialog<_GatekeeperRecordResult>(
       context: context,
-      builder: (_) => _GatekeeperRemarksDialog(action: action),
+      builder: (_) => _GatekeeperRemarksDialog(ticket: ticket, action: action),
     );
 
     if (result == null) {
@@ -215,11 +215,13 @@ class _GatekeeperScreenState extends State<GatekeeperScreen> {
               ticket.id,
               result.remarks,
               result.actualDateTime,
+              result.odometer,
             )
           : await widget.api.gatekeeperRecordReturn(
               ticket.id,
               result.remarks,
               result.actualDateTime,
+              result.odometer,
             );
 
       if (_tab == 2) {
@@ -642,15 +644,18 @@ class _GatekeeperRecordResult {
   const _GatekeeperRecordResult({
     required this.actualDateTime,
     required this.remarks,
+    required this.odometer,
   });
 
   final DateTime actualDateTime;
   final String remarks;
+  final double odometer;
 }
 
 class _GatekeeperRemarksDialog extends StatefulWidget {
-  const _GatekeeperRemarksDialog({required this.action});
+  const _GatekeeperRemarksDialog({required this.ticket, required this.action});
 
+  final TripTicket ticket;
   final String action;
 
   @override
@@ -660,6 +665,8 @@ class _GatekeeperRemarksDialog extends StatefulWidget {
 
 class _GatekeeperRemarksDialogState extends State<_GatekeeperRemarksDialog> {
   final _remarks = TextEditingController();
+  final _odometer = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
   final _dateTimeFormat = DateFormat('MMM d, yyyy h:mm a');
   late DateTime _actualDateTime;
 
@@ -672,6 +679,7 @@ class _GatekeeperRemarksDialogState extends State<_GatekeeperRemarksDialog> {
   @override
   void dispose() {
     _remarks.dispose();
+    _odometer.dispose();
     super.dispose();
   }
 
@@ -723,10 +731,12 @@ class _GatekeeperRemarksDialogState extends State<_GatekeeperRemarksDialog> {
           ),
         ],
       ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           Text(
             'Actual $actionLabel time',
             style: const TextStyle(
@@ -769,6 +779,42 @@ class _GatekeeperRemarksDialogState extends State<_GatekeeperRemarksDialog> {
             ),
           ),
           const SizedBox(height: 16),
+          if (!isDeparture && widget.ticket.departureOdometer != null) ...[
+            Text(
+              'Departure odometer: ${_formatOdometer(widget.ticket.departureOdometer!)} km',
+              style: const TextStyle(
+                color: PortalColors.muted,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+          TextFormField(
+            controller: _odometer,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            autofocus: true,
+            decoration: InputDecoration(
+              labelText: isDeparture
+                  ? 'Departure odometer (km)'
+                  : 'Return odometer (km)',
+              suffixText: 'km',
+            ),
+            validator: (value) {
+              final reading = double.tryParse(value?.trim() ?? '');
+              if (reading == null) {
+                return 'Enter a valid odometer reading.';
+              }
+              if (reading < 0) {
+                return 'Odometer cannot be negative.';
+              }
+              final departure = widget.ticket.departureOdometer;
+              if (!isDeparture && departure != null && reading < departure) {
+                return 'Must be at least ${_formatOdometer(departure)} km.';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 16),
           TextField(
             controller: _remarks,
             minLines: 3,
@@ -778,7 +824,8 @@ class _GatekeeperRemarksDialogState extends State<_GatekeeperRemarksDialog> {
               alignLabelWithHint: true,
             ),
           ),
-        ],
+          ],
+        ),
       ),
       actions: [
         TextButton(
@@ -786,17 +833,30 @@ class _GatekeeperRemarksDialogState extends State<_GatekeeperRemarksDialog> {
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: () => Navigator.of(context).pop(
-            _GatekeeperRecordResult(
-              actualDateTime: _actualDateTime,
-              remarks: _remarks.text.trim(),
-            ),
-          ),
+          onPressed: () {
+            if (!_formKey.currentState!.validate()) {
+              return;
+            }
+
+            Navigator.of(context).pop(
+              _GatekeeperRecordResult(
+                actualDateTime: _actualDateTime,
+                remarks: _remarks.text.trim(),
+                odometer: double.parse(_odometer.text.trim()),
+              ),
+            );
+          },
           child: const Text('Confirm'),
         ),
       ],
     );
   }
+}
+
+String _formatOdometer(double value) {
+  return value == value.roundToDouble()
+      ? NumberFormat('#,##0').format(value)
+      : NumberFormat('#,##0.##').format(value);
 }
 
 class _EmptyPanel extends StatelessWidget {

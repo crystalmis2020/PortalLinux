@@ -13,7 +13,9 @@ class TripTicket {
     this.requestedStart,
     this.requestedEnd,
     this.actualDeparture,
+    this.departureOdometer,
     this.actualReturn,
+    this.returnOdometer,
     this.approvalRemarks,
     this.requesterName,
     this.departmentName,
@@ -43,7 +45,9 @@ class TripTicket {
   final DateTime? requestedStart;
   final DateTime? requestedEnd;
   final DateTime? actualDeparture;
+  final double? departureOdometer;
   final DateTime? actualReturn;
+  final double? returnOdometer;
   final String? approvalRemarks;
   final String? requesterName;
   final String? departmentName;
@@ -78,7 +82,9 @@ class TripTicket {
       requestedStart: _date(json['requested_start_datetime']),
       requestedEnd: _date(json['requested_end_datetime']),
       actualDeparture: _date(json['actual_departure_datetime']),
+      departureOdometer: _number(json['departure_odometer']),
       actualReturn: _date(json['actual_return_datetime']),
+      returnOdometer: _number(json['return_odometer']),
       approvalRemarks: json['approval_remarks'] as String?,
       requesterName: _nestedName(json['requester']),
       departmentName: _nestedName(json['department']),
@@ -103,6 +109,14 @@ class TripTicket {
     }
 
     return DateTime.tryParse(value.toString())?.toLocal();
+  }
+
+  static double? _number(dynamic value) {
+    if (value is num) {
+      return value.toDouble();
+    }
+
+    return double.tryParse(value?.toString() ?? '');
   }
 
   static String? _nestedName(dynamic value) {

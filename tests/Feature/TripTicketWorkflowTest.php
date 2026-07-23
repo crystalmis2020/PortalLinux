@@ -290,6 +290,66 @@ class TripTicketWorkflowTest extends TestCase
             ]);
     }
 
+    public function test_gatekeeper_records_and_validates_odometer_readings(): void
+    {
+        [$gatekeeper] = $this->tripTicketUsers();
+        User::withoutEvents(fn () => $gatekeeper->update([
+            'can_gatekeep_trip_tickets' => true,
+        ]));
+
+        $ticket = TripTicket::create([
+            'requested_by' => $gatekeeper->id,
+            'department_id' => $gatekeeper->department_id,
+            'section_id' => $gatekeeper->section_id,
+            'purpose' => 'Odometer workflow test',
+            'destination' => 'Main Office',
+            'requested_start_datetime' => now()->subHour(),
+            'requested_end_datetime' => now()->addHours(2),
+            'vehicle_details' => 'Test vehicle',
+            'driver_name' => 'Test driver',
+            'status' => TripTicket::STATUS_APPROVED,
+        ]);
+
+        Sanctum::actingAs($gatekeeper);
+
+        $this->postJson('/api/trip-tickets/gatekeeper/' . $ticket->id . '/departure', [
+            'actual_departure_datetime' => now()->toIso8601String(),
+        ])->assertUnprocessable()->assertJsonValidationErrors('departure_odometer');
+
+        $departureTime = now()->subMinutes(30);
+        $this->postJson('/api/trip-tickets/gatekeeper/' . $ticket->id . '/departure', [
+            'actual_departure_datetime' => $departureTime->toIso8601String(),
+            'departure_odometer' => 125430.5,
+            'remarks' => 'Departure reading verified.',
+        ])
+            ->assertOk()
+            ->assertJsonPath('ticket.status', TripTicket::STATUS_DISPATCHED)
+            ->assertJsonPath('ticket.departure_odometer', 125430.5);
+
+        $ticket->refresh();
+        $this->assertSame(125430.5, $ticket->departure_odometer);
+
+        $this->postJson('/api/trip-tickets/gatekeeper/' . $ticket->id . '/return', [
+            'actual_return_datetime' => now()->toIso8601String(),
+            'return_odometer' => 125400,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Return odometer cannot be lower than departure odometer.');
+
+        $this->postJson('/api/trip-tickets/gatekeeper/' . $ticket->id . '/return', [
+            'actual_return_datetime' => now()->toIso8601String(),
+            'return_odometer' => 125612.5,
+            'remarks' => 'Return reading verified.',
+        ])
+            ->assertOk()
+            ->assertJsonPath('ticket.status', TripTicket::STATUS_COMPLETED)
+            ->assertJsonPath('ticket.return_odometer', 125612.5);
+
+        $ticket->refresh();
+        $this->assertSame(125612.5, $ticket->return_odometer);
+        $this->assertSame(182.0, $ticket->return_odometer - $ticket->departure_odometer);
+    }
+
     /**
      * @return array{0: User, 1: User, 2: User}
      */

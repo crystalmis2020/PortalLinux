@@ -2,6 +2,8 @@
 
 namespace App\Console\Commands;
 
+use App\Http\Controllers\InternetAccessRequestController;
+use App\Models\InternetAccessConnectorToken;
 use App\Models\InternetAccessRequest;
 use App\Services\Mikrotik\RouterOsClient;
 use Illuminate\Console\Command;
@@ -13,12 +15,30 @@ class SyncInternetAccessRequests extends Command
 
     protected $description = 'Start internet access countdowns after first MikroTik connection and expire old access.';
 
-    public function handle(RouterOsClient $mikrotik): int
+    public function handle(RouterOsClient $mikrotik, InternetAccessRequestController $controller): int
     {
+        $this->autoApprovePendingRequests($mikrotik, $controller);
         $this->activateConnectedRequests($mikrotik);
         $this->expireActiveRequests($mikrotik);
+        $this->deleteOldConnectorTokens();
 
         return self::SUCCESS;
+    }
+
+    protected function autoApprovePendingRequests(RouterOsClient $mikrotik, InternetAccessRequestController $controller): void
+    {
+        InternetAccessRequest::where('status', InternetAccessRequest::STATUS_PENDING)
+            ->where('created_at', '<=', now()->subMinute())
+            ->orderBy('id')
+            ->chunkById(50, function ($requests) use ($mikrotik, $controller) {
+                foreach ($requests as $request) {
+                    try {
+                        $controller->provision($request, $mikrotik);
+                    } catch (Throwable) {
+                        // provision() records and reports the failure.
+                    }
+                }
+            });
     }
 
     protected function activateConnectedRequests(RouterOsClient $mikrotik): void
@@ -34,13 +54,16 @@ class SyncInternetAccessRequests extends Command
 
                         $connectedAt = now();
 
-                        $request->update([
-                            'status' => InternetAccessRequest::STATUS_ACTIVE,
-                            'connected_at' => $connectedAt,
-                            'expires_at' => $connectedAt->copy()->addMinutes($request->duration_minutes),
-                            'last_seen_online_at' => $connectedAt,
-                            'failure_reason' => null,
-                        ]);
+                        InternetAccessRequest::query()
+                            ->whereKey($request->id)
+                            ->where('status', InternetAccessRequest::STATUS_READY)
+                            ->update([
+                                'status' => InternetAccessRequest::STATUS_ACTIVE,
+                                'connected_at' => $connectedAt,
+                                'expires_at' => $connectedAt->copy()->addMinutes($request->duration_minutes),
+                                'last_seen_online_at' => $connectedAt,
+                                'failure_reason' => null,
+                            ]);
 
                     } catch (Throwable $exception) {
                         report($exception);
@@ -75,5 +98,12 @@ class SyncInternetAccessRequests extends Command
                     }
                 }
             });
+    }
+
+    protected function deleteOldConnectorTokens(): void
+    {
+        InternetAccessConnectorToken::query()
+            ->where('expires_at', '<', now()->subDay())
+            ->delete();
     }
 }

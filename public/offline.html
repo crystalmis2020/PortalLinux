@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#02681e">
+    <title>Support Portal is offline</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            min-height: 100vh;
+            margin: 0;
+            display: grid;
+            place-items: center;
+            padding: 24px;
+            color: #17351f;
+            background: #f3f7f2;
+            font-family: "Segoe UI", Arial, sans-serif;
+        }
+        main {
+            width: min(480px, 100%);
+            padding: 32px;
+            text-align: center;
+            border: 1px solid #d6e3d7;
+            border-radius: 18px;
+            background: #fff;
+            box-shadow: 0 18px 48px rgba(0, 73, 30, .12);
+        }
+        h1 { margin: 0 0 12px; font-size: 1.55rem; }
+        p { margin: 0 0 22px; color: #53685a; line-height: 1.55; }
+        button {
+            min-height: 44px;
+            padding: 10px 20px;
+            color: #fff;
+            border: 0;
+            border-radius: 10px;
+            background: #02681e;
+            font: inherit;
+            font-weight: 700;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>Support Portal is offline</h1>
+        <p>Reconnect to the company network, then try again. Internet requests and connector tokens are never loaded from an offline cache.</p>
+        <button type="button" onclick="window.location.reload()">Try Again</button>
+    </main>
+</body>
+</html>

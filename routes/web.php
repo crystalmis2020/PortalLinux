@@ -16,6 +16,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\InventoryItemController;
 use App\Http\Controllers\MessengerController;
 use App\Http\Controllers\InternetAccessRequestController;
+use App\Http\Controllers\InternetAccessConnectorController;
 use App\Http\Controllers\TripTicketController;
 use App\Http\Controllers\TripTicketDriverController;
 use App\Http\Controllers\TripTicketLocationController;
@@ -59,9 +60,13 @@ Route::middleware(['auth'])->prefix('messenger')->name('messenger.')->controller
 Route::middleware(['auth'])->prefix('internet-access')->name('internet-access.')->controller(InternetAccessRequestController::class)->group(function () {
     Route::get('/', 'index')->name('index');
     Route::post('/', 'store')->name('store');
-    Route::get('/{tripTicket}/edit', 'edit')->name('edit');
-    Route::put('/{tripTicket}', 'update')->name('update');
+    Route::post('/{internetAccessRequest}/approve', 'approve')->name('approve');
     Route::get('/status/{internetAccessRequest}', 'status')->name('status');
+});
+
+Route::middleware(['auth'])->prefix('internet-access/connector')->name('internet-access.connector.')->controller(InternetAccessConnectorController::class)->group(function () {
+    Route::get('/download', 'download')->name('download');
+    Route::post('/{internetAccessRequest}/token', 'issue')->middleware('throttle:10,1')->name('token');
 });
 
 Route::middleware(['auth'])->prefix('notifications')->name('notifications.')->controller(NotificationController::class)->group(function () {

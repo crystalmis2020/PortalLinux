@@ -35,6 +35,13 @@
             </a>
         </li>
         <li>
+            <a href="{{ route('internet-access.index') }}">
+                <div class="parent-icon"><i class='bx bx-globe'></i>
+                </div>
+                <div class="menu-title">Internet Access</div>
+            </a>
+        </li>
+        <li>
             <a href="{{ route('settings') }}">
                 <div class="parent-icon"><i class='bx bx-list-ul'></i>
                 </div>

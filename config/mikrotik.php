@@ -10,9 +10,16 @@ return [
     'default_customer' => env('MIKROTIK_CUSTOMER', 'xonivre'),
     'service' => env('MIKROTIK_SERVICE', 'pppoe'),
     'profiles' => [
-        '1h' => env('MIKROTIK_PROFILE_1H', '1MB_Connection'),
-        '2h' => env('MIKROTIK_PROFILE_2H', '5MB_Connection'),
-        '3h' => env('MIKROTIK_PROFILE_3H', '5MB_Connection'),
-        '8h' => env('MIKROTIK_PROFILE_8H', '50MB_Connection'),
+        '1h' => env('MIKROTIK_PROFILE_1H', '10mbps-profile'),
+        '4h' => env('MIKROTIK_PROFILE_4H', '5mbps-profile'),
+    ],
+    'connector' => [
+        'enabled' => (bool) env('MIKROTIK_CONNECTOR_ENABLED', true),
+        'protocol' => env('MIKROTIK_CONNECTOR_PROTOCOL', 'supportportal-connect'),
+        'connection_name' => env('MIKROTIK_CONNECTOR_CONNECTION_NAME', 'Broadband Connection'),
+        'token_ttl_seconds' => (int) env('MIKROTIK_CONNECTOR_TOKEN_TTL', 120),
+        'verification_window_seconds' => (int) env('MIKROTIK_CONNECTOR_VERIFICATION_WINDOW', 300),
+        'bind_token_to_ip' => (bool) env('MIKROTIK_CONNECTOR_BIND_TOKEN_TO_IP', true),
+        'require_https' => (bool) env('MIKROTIK_CONNECTOR_REQUIRE_HTTPS', true),
     ],
 ];

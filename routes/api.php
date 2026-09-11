@@ -4,9 +4,15 @@ use App\Http\Controllers\Api\TripTicketApprovalController;
 use App\Http\Controllers\Api\TripTicketGatekeeperController;
 use App\Http\Controllers\Api\MobileAuthController;
 use App\Http\Controllers\TripTicketLocationController;
+use App\Http\Controllers\InternetAccessConnectorController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [MobileAuthController::class, 'login'])->name('api.login');
+
+Route::prefix('internet-access/connector')->name('api.internet-access.connector.')->controller(InternetAccessConnectorController::class)->group(function () {
+    Route::post('/exchange', 'exchange')->middleware('throttle:30,1')->name('exchange');
+    Route::post('/verify', 'verify')->middleware('throttle:30,1')->name('verify');
+});
 
 Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/me', [MobileAuthController::class, 'me'])->name('api.me');

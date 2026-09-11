@@ -1,162 +1,167 @@
-# Internet Access Request Setup
+# Internet Access Request
 
-This document explains how the new Internet Access Request module was added to the Support Portal.
+This module gives authenticated Support Portal users temporary internet access
+through the company's existing MikroTik PPPoE setup. It does not require a
+change from PPPoE or any automatic firewall/Hotspot configuration.
 
-It is written for a beginner developer, so the explanations are step by step.
+## User Flow
 
-## What This Feature Does
+1. The user selects **Internet Access** in the portal sidebar (route
+   `/internet-access`).
+2. The user selects one or four hours, enters a purpose, and submits a request.
+3. An administrator can approve immediately. The scheduler approves a still
+   pending request automatically after one minute.
+4. Approval creates a temporary PPPoE secret in MikroTik and changes the
+   request from `pending` to `ready`.
+5. The page displays **Connect**. It never displays the PPPoE username or
+   password.
+6. The user accepts the browser prompt to open the installed Support Portal
+   Internet Connector.
+7. The connector redeems a short-lived token once, receives the temporary
+   credentials over HTTPS, and dials the existing Windows RAS entry named
+   `Broadband Connection` through the native `RasDialW` API.
+8. MikroTik confirms that the PPPoE user is active. Only then does the request
+   become `active` and the countdown begin.
+9. At expiration, the scheduler removes the PPPoE secret and marks the request
+   `expired`.
 
-The Internet Access Request module lets a logged-in user create temporary MikroTik internet access.
+The Internet Access module no longer sends credentials through IPMsg. IPMsg
+usage in other Support Portal modules is unchanged.
 
-The new flow is:
+## Important Requirements
 
-1. User visits `/internet-access`.
-2. User selects the requested time: `1h`, `2h`, `3h`, or `8h`.
-3. User enters a purpose.
-4. The system immediately creates a MikroTik account.
-5. The username and password are generated using the old project style.
-6. Username and password are the same.
-7. The page shows the generated username/password.
-8. IPMsg sends the username/password to the user's IP address.
-9. Countdown starts only after MikroTik detects the first successful connection.
-10. Countdown continues even if the user disconnects.
-11. When the timer expires, the system removes the MikroTik access.
+- MikroTik PPPoE and the profiles configured below must already work.
+- The Laravel scheduler must run every minute.
+- Each Windows client must already have a RAS/PPPoE entry named exactly
+  `Broadband Connection`.
+- Users install the connector once in their Windows profile.
+- The portal must use HTTPS with a certificate trusted by every client.
+- Windows 7 SP1 clients must have TLS 1.2/Schannel updates installed.
 
-There is no admin approval in this version.
+The connector supports Windows 7 SP1, Windows 10, and Windows 11. Runtime
+validation on representative company PCs is required before broad deployment,
+especially for Windows 7, proxy settings, antivirus/application-control rules,
+and per-user versus all-user RAS phonebooks.
 
-## Important Route
+## Main Files
 
-The page is available here:
+| Purpose | File |
+| --- | --- |
+| Request and approval flow | `app/Http/Controllers/InternetAccessRequestController.php` |
+| Connector token and download endpoints | `app/Http/Controllers/InternetAccessConnectorController.php` |
+| Request model | `app/Models/InternetAccessRequest.php` |
+| One-time token model | `app/Models/InternetAccessConnectorToken.php` |
+| RouterOS API client | `app/Services/Mikrotik/RouterOsClient.php` |
+| Scheduler command | `app/Console/Commands/SyncInternetAccessRequests.php` |
+| Browser page | `resources/views/internet-access/index.blade.php` |
+| PWA manifest and service worker | `public/manifest.webmanifest`, `public/service-worker.js` |
+| Windows connector source | `tools/internet-access-connector/` |
+| MikroTik/connector configuration | `config/mikrotik.php` |
 
-```text
-/internet-access
-```
+## Routes
 
-If the app is deployed under `/support`, use:
-
-```text
-/support/internet-access
-```
-
-The user must be logged in because the route uses Laravel `auth` middleware.
-
-## Files Added
-
-These are the main files for this feature.
-
-### Controller
-
-```text
-app/Http/Controllers/InternetAccessRequestController.php
-```
-
-This handles:
-
-- showing the Internet Access page
-- creating a request
-- generating username/password
-- calling MikroTik
-- sending IPMsg
-- returning AJAX status for the countdown
-
-### Model
-
-```text
-app/Models/InternetAccessRequest.php
-```
-
-This represents one internet access request in the database.
-
-### Migration
+All browser routes require the normal Laravel session authentication:
 
 ```text
-database/migrations/2026_05_19_000001_create_internet_access_requests_table.php
+GET  /internet-access
+POST /internet-access
+POST /internet-access/{request}/approve
+GET  /internet-access/status/{request}
+GET  /internet-access/connector/download
+POST /internet-access/connector/{request}/token
 ```
 
-This creates the database table:
+The installed connector calls two token-authenticated API routes:
 
 ```text
-internet_access_requests
+POST /api/internet-access/connector/exchange
+POST /api/internet-access/connector/verify
 ```
 
-### MikroTik Service
+The API routes do not accept a portal session as connector authorization. They
+require a random bearer token issued to the authenticated owner of a `ready`
+request, and they are explicitly rate-limited.
 
-```text
-app/Services/Mikrotik/RouterOsClient.php
+## Environment Configuration
+
+Use deployment-specific values in `.env`:
+
+```env
+MIKROTIK_ENABLED=true
+MIKROTIK_HOST=
+MIKROTIK_PORT=8728
+MIKROTIK_USERNAME=
+MIKROTIK_PASSWORD=
+MIKROTIK_TIMEOUT=10
+MIKROTIK_SERVICE=pppoe
+MIKROTIK_PROFILE_1H=
+MIKROTIK_PROFILE_4H=
+
+MIKROTIK_CONNECTOR_ENABLED=true
+MIKROTIK_CONNECTOR_PROTOCOL=supportportal-connect
+MIKROTIK_CONNECTOR_CONNECTION_NAME="Broadband Connection"
+MIKROTIK_CONNECTOR_TOKEN_TTL=120
+MIKROTIK_CONNECTOR_VERIFICATION_WINDOW=300
+MIKROTIK_CONNECTOR_BIND_TOKEN_TO_IP=true
+MIKROTIK_CONNECTOR_REQUIRE_HTTPS=true
 ```
 
-This is the class that talks to MikroTik RouterOS.
-
-The controller does not directly send RouterOS commands. Instead, it calls this service.
-
-### Scheduler Command
-
-```text
-app/Console/Commands/SyncInternetAccessRequests.php
-```
-
-This command checks MikroTik and updates request statuses.
-
-It does two important things:
-
-- checks if a `ready` user has connected for the first time
-- expires `active` users when their time is finished
-
-The command name is:
+After updating `.env`, clear the cached configuration:
 
 ```bash
-php artisan internet-access:sync
+php artisan config:clear
 ```
 
-### View
+`APP_URL` must be the canonical public HTTPS base URL, including `/support` or
+any other deployment subdirectory. The generated connector package is bound to
+this configured value rather than trusting the incoming HTTP `Host` header.
 
-```text
-resources/views/internet-access/index.blade.php
+Keep `MIKROTIK_CONNECTOR_PROTOCOL` and
+`MIKROTIK_CONNECTOR_CONNECTION_NAME` at the shown values for connector version
+1.1.0. The API continues accepting version 1.0.0 during the certificate rollout.
+
+`MIKROTIK_CONNECTOR_BIND_TOKEN_TO_IP=true` requires the browser request and the
+connector's WinHTTP exchange to reach Laravel from the same source IP. If the
+two use different proxy paths, the exchange will be rejected. Correct trusted
+proxy handling first, or deliberately disable this additional binding after a
+security review. Verification is not IP-bound because establishing PPPoE can
+legitimately change the source IP; it returns no credentials.
+
+Never disable the HTTPS requirement in production. The connector deliberately
+rejects HTTP, redirects, untrusted certificates, and obsolete TLS fallback.
+
+If TLS terminates at a reverse proxy, configure Laravel to trust only that
+proxy's exact IP/CIDR and forwarded headers in `bootstrap/app.php`. Otherwise
+Laravel will reject connector requests as insecure and source-IP token binding
+may see the proxy address instead of the client. Do not trust all proxies.
+
+## Database Setup
+
+Deploy the migrations normally:
+
+```bash
+php artisan migrate
 ```
 
-This is the page the user sees.
+The connector migration creates `internet_access_connector_tokens`. Only a
+SHA-256 hash of each random 256-bit token is stored. Tokens expire quickly and
+can deliver credentials only once.
 
-It shows:
+The credential migration changes the password column to `TEXT`, encrypts any
+existing plaintext PPPoE passwords using Laravel's `APP_KEY`, and enables the
+model's encrypted cast. Back up the database and confirm that the production
+`APP_KEY` is stable before migration. Changing or losing `APP_KEY` afterward
+will make existing encrypted credentials unreadable.
 
-- request form
-- current username/password
-- waiting state
-- countdown timer
-- request history
+Deploy this migration in maintenance mode so no web worker tries to read a
+legacy plaintext password after code with the encrypted model cast is live.
 
-### Config
+New requests use separate random usernames and passwords. Neither value is
+rendered in the page, request history, custom protocol URL, or connector files.
 
-```text
-config/mikrotik.php
-```
+## Scheduler
 
-This reads MikroTik settings from `.env`.
-
-## Files Updated
-
-### Routes
-
-```text
-routes/web.php
-```
-
-Added:
-
-```php
-Route::middleware(['auth'])->prefix('internet-access')->name('internet-access.')->controller(InternetAccessRequestController::class)->group(function () {
-    Route::get('/', 'index')->name('index');
-    Route::post('/', 'store')->name('store');
-    Route::get('/status/{internetAccessRequest}', 'status')->name('status');
-});
-```
-
-### Scheduler
-
-```text
-routes/console.php
-```
-
-Added:
+`routes/console.php` schedules:
 
 ```php
 Schedule::command('internet-access:sync')
@@ -164,321 +169,217 @@ Schedule::command('internet-access:sync')
     ->withoutOverlapping();
 ```
 
-This means Laravel will run the sync command every minute when the scheduler is active.
+The server must run Laravel's scheduler, for example:
 
-### Environment
+```cron
+* * * * * cd /path/to/support-portal && php artisan schedule:run >> /dev/null 2>&1
+```
+
+The command:
+
+- automatically approves old pending requests;
+- detects connected PPPoE users as a fallback to immediate connector
+  verification;
+- starts the timer only after router confirmation;
+- removes expired PPPoE secrets; and
+- deletes old connector-token records.
+
+## Installing the Windows Connector
+
+The Internet Access page creates a deployment-bound ZIP dynamically. The ZIP
+contains `portal-url.txt`, which fixes the installed connector to the HTTPS
+origin from which it was downloaded.
+
+For each Windows user:
+
+1. Click **Install Windows Connector**.
+2. Extract the downloaded ZIP. Do not run `install.cmd` from inside the ZIP.
+3. Double-click `install.cmd`.
+4. Accept the Windows certificate trust prompt if one is shown, then confirm
+   the success message showing the portal URL, `Broadband Connection`, and the
+   trusted portal certificate.
+5. Return to the portal and click **Connect** after approval.
+6. Allow the browser to open **Support Portal Internet Connector**. The browser
+   may offer an option to remember the choice.
+
+The Connect action opens a portal modal and sends the custom protocol through
+an isolated background frame. This keeps the Internet Access page visible when
+an embedded Chromium desktop launcher reports an unknown-protocol error such as
+`-302`. If the connector does not respond, the modal provides retry and install
+actions instead of navigating the main portal page away.
+
+A desktop launcher must still allow `supportportal-connect://` URLs to be
+handed to Windows. If the launcher blocks every external protocol, its host
+configuration must allow this scheme before the connector can start.
+
+## Installing the Portal PWA
+
+The PWA replaces a desktop launcher that blocks external protocol handoff. It
+does not replace the Windows connector and never handles PPPoE credentials.
+
+On Windows 10 or Windows 11:
+
+1. Open `https://128.0.1.20/support/internet-access` in Microsoft Edge or
+   Google Chrome after installing connector version 1.1.0 and trusting the
+   Support Portal root certificate.
+2. Select **Install Portal App** on the Internet Access page. The browser's
+   address-bar install action can be used if the button is not visible.
+3. Launch **CSCI Support Portal** from the Start menu or desktop shortcut and
+   sign in normally.
+4. Submit the request and select **Connect** after approval. In standalone PWA
+   mode, the user click launches `supportportal-connect://` directly so Windows
+   can hand it to the installed connector.
+
+The PWA is scoped to `/support/` and starts at `/support/internet-access`.
+Authenticated pages, API responses, request status, and connector tokens are
+network-only. The service worker caches only versioned/static portal assets and
+an offline explanation page, so it cannot serve stale approvals or credentials.
+
+Windows 7 cannot be treated as a supported modern PWA target. Those clients
+should continue using the normal supported-browser page and installed connector
+after completing the required TLS 1.2 updates.
+
+The installer button is always available at the top of the Internet Access
+page, so users can complete this one-time setup before submitting a request.
+Use a modern browser supported by the portal; Internet Explorer 11 is not
+supported by the portal UI.
+
+After the first connector-launched connection is confirmed, the page remembers
+that installation in the current browser and hides the installer button. If a
+later Connect attempt does not open the connector, the button appears again so
+the user can reinstall it. Browser privacy/storage restrictions may keep the
+button visible; this does not affect the connection flow.
+
+Installation is per user and normally does not require administrator rights.
+It copies the connector to:
 
 ```text
-.env
+%LOCALAPPDATA%\SupportPortalConnector
 ```
 
-Added MikroTik settings:
+It registers `supportportal-connect` beneath
+`HKCU\Software\Classes`, so it does not change the PPPoE profile or system-wide
+network configuration.
 
-```env
-MIKROTIK_ENABLED=true
-MIKROTIK_HOST=128.0.100.1
-MIKROTIK_PORT=8728
-MIKROTIK_USERNAME=Alkaloid
-MIKROTIK_PASSWORD=alkaloid
-MIKROTIK_TIMEOUT=10
-MIKROTIK_SERVICE=pppoe
-MIKROTIK_CUSTOMER=xonivre
-MIKROTIK_PROFILE_1H=1MB_Connection
-MIKROTIK_PROFILE_2H=5MB_Connection
-MIKROTIK_PROFILE_3H=5MB_Connection
-MIKROTIK_PROFILE_8H=50MB_Connection
-```
-
-These values came from the old integrated internet request project.
-
-## Database Setup
-
-Run this command:
-
-```bash
-php artisan migrate
-```
-
-This creates the `internet_access_requests` table.
-
-If Laravel says the app is in production and asks for confirmation, type `yes`.
-
-## Clear Config Cache
-
-After changing `.env`, always run:
-
-```bash
-php artisan config:clear
-```
-
-Laravel sometimes caches `.env` values. Clearing config makes sure the app reads the latest MikroTik settings.
-
-## How Username And Password Are Generated
-
-The new module keeps the old username/password style.
-
-Example:
+Version 1.1.0 also verifies and installs the dedicated public Support Portal
+root certificate into the current user's Trusted Root store. The downloadable
+package never contains the root CA private key or the Apache server private key.
+The pinned root CA SHA-256 fingerprint is:
 
 ```text
-1hA8kLmP2
+20:FE:C5:EE:30:4B:6E:19:30:EE:8A:A7:D3:70:F6:E5:44:C3:B7:87:1C:F6:66:26:45:AA:9C:07:04:C8:75:09
 ```
 
-The format is:
+The server certificate contains `IP:128.0.1.20` as a Subject Alternative
+Name and is valid through December 14, 2028. The dedicated root CA is valid
+through September 8, 2036. Track both dates for renewal.
+
+To uninstall, run:
 
 ```text
-requested_hours + random_7_characters
+%LOCALAPPDATA%\SupportPortalConnector\uninstall.cmd
 ```
 
-The password is exactly the same as the username.
-
-Example:
-
-```text
-Username: 1hA8kLmP2
-Password: 1hA8kLmP2
-```
-
-## MikroTik Profile Mapping
-
-The requested time maps to a MikroTik profile.
-
-```text
-1h -> 1MB_Connection
-2h -> 5MB_Connection
-3h -> 5MB_Connection
-8h -> 50MB_Connection
-```
-
-You can change these in `.env`:
-
-```env
-MIKROTIK_PROFILE_1H=1MB_Connection
-MIKROTIK_PROFILE_2H=5MB_Connection
-MIKROTIK_PROFILE_3H=5MB_Connection
-MIKROTIK_PROFILE_8H=50MB_Connection
-```
+The current package consists of PowerShell scripts and should be code-signed or
+distributed with an organization-published hash before production rollout.
+Some application-control policies or antivirus products may require MIS to
+allow the connector. The package uses `ExecutionPolicy Bypass` only for its
+fixed local scripts; PowerShell execution policy is not treated as a security
+boundary.
 
 ## Status Meanings
 
-Each request has a `status`.
+- `pending`: waiting for administrator or one-minute automatic approval.
+- `ready`: the PPPoE secret exists and the Connect button is available.
+- `active`: MikroTik confirmed the PPPoE session and the timer is running.
+- `expired`: the allowed duration ended and the PPPoE secret was removed.
+- `failed`: MikroTik provisioning failed.
 
-### ready
+Clicking Connect by itself never marks a request active. The connector's
+verification endpoint queries MikroTik, and the minute scheduler provides a
+fallback if immediate verification cannot reach the portal after Windows
+changes routes.
 
-MikroTik account was created, but the user has not connected yet.
+## Token Security
 
-The countdown has not started.
-
-### active
-
-MikroTik detected that the user connected successfully.
-
-The countdown is now running.
-
-### expired
-
-The requested time is finished.
-
-The system removes the MikroTik access.
-
-### failed
-
-The system failed to create the MikroTik access.
-
-Common reasons:
-
-- wrong MikroTik username/password
-- MikroTik API is disabled
-- portal server cannot reach MikroTik IP
-- port `8728` is blocked
-- MikroTik profile does not exist
-
-## Countdown Rule
-
-The countdown starts only after the first successful MikroTik connection.
-
-Example:
+The Connect button is prepared with a 43-character, unpadded base64url token
+created from 32 random bytes. The custom URL contains only this token:
 
 ```text
-User requests 1 hour at 10:00 AM
-User connects at 10:15 AM
-Countdown starts at 10:15 AM
-Access expires at 11:15 AM
+supportportal-connect://connect?token=ONE_TIME_TOKEN
 ```
 
-If the user disconnects at 10:30 AM, the countdown still continues.
+It never contains a request ID, portal URL, username, or password. The
+connector accepts only that exact URL shape and sends the token to its fixed
+installed portal origin. Credential responses are marked `no-store`.
 
-This is intentional.
+The exchange is rejected when the token is malformed, unknown, expired,
+already used, belongs to a request that is no longer ready, or fails the
+configured IP binding. All these cases return the same generic authentication
+failure so the endpoint does not reveal token state.
 
-The rule is:
+## Test Checklist
 
-```text
-Disconnecting does not pause the timer.
-```
+Before production rollout:
 
-## IPMsg Setup
+1. Back up the database and run `php artisan migrate`.
+2. Confirm the portal is HTTPS and trusted on Windows 7, 10, and 11.
+3. Confirm the exact RAS entry is `Broadband Connection` on each test PC.
+4. Install the connector from the page for a standard, non-admin Windows user.
+5. Submit and approve a one-hour test request.
+6. Confirm no PPPoE username/password appears in the page or IPMsg.
+7. Click Connect and accept the browser protocol prompt.
+8. Confirm Windows connects and the page changes from `ready` to `active`.
+9. Confirm clicking an old/reused Connect URL cannot return credentials.
+10. Confirm expiration disconnects future access by removing the PPPoE secret.
+11. Test per-user and all-user phonebooks, the browsers used by the company,
+    WinHTTP proxy behavior, antivirus, and Windows 7 TLS 1.2.
 
-The module sends an IPMsg message after the MikroTik account is created.
+## Troubleshooting
 
-Message format:
+### Connect button says HTTPS is required
 
-```text
-Your internet access is ready. Username: {username} Password: {username}
-```
+Serve the portal over HTTPS, install a client-trusted certificate, correct the
+public `APP_URL`, and clear Laravel's configuration cache. Do not bypass this in
+production because the connector exchange carries temporary PPPoE credentials.
 
-The module uses the existing helper:
+### Browser says no application can open the link
 
-```php
-sendIpMsgNotification()
-```
+Download the connector ZIP, extract it, and run `install.cmd` as the same
+Windows user who uses the portal. Reinstall if the HKCU protocol registration
+was removed.
 
-That helper is located in:
+### Connector cannot find Broadband Connection
 
-```text
-app/Helpers/helpers.php
-```
+Open Windows Network Connections and verify the existing entry is named
+exactly `Broadband Connection`. The connector checks the default, per-user, and
+all-user RAS phonebooks.
 
-Important:
+### Token is invalid or expired
 
-This new setup uses UDP IPMsg packets through PHP. It does not use the old Windows `ipmsg.exe`.
+Return to the page and click Connect again. Each prepared token is short-lived
+and returns credentials only once. Check source-IP/proxy differences when this
+happens consistently.
 
-## Scheduler Setup
+### Windows reports RAS error 691
 
-The countdown and expiry depend on the Laravel scheduler.
+MikroTik rejected the generated username/password. Check that the request is
+still `ready`, the PPPoE secret exists, and the profile/service configuration
+is correct.
 
-For local testing, you can run:
+### Windows connects but the page remains ready
 
-```bash
-php artisan schedule:work
-```
-
-Keep that command running in a terminal.
-
-For production, the server should run Laravel scheduler every minute using cron:
-
-```cron
-* * * * * cd /path/to/support-portal-web1 && php artisan schedule:run >> /dev/null 2>&1
-```
-
-Change `/path/to/support-portal-web1` to the real project path.
-
-## Manual Sync Test
-
-You can manually run the sync command:
+The immediate verification request may have lost the route to the portal after
+PPPoE connected. Confirm the scheduler is running and manually test:
 
 ```bash
 php artisan internet-access:sync
 ```
 
-This checks:
+Also confirm the portal server can reach the MikroTik API and that the user is
+visible under `/ppp/active`.
 
-- ready requests that may now be connected
-- active requests that may already be expired
+### Windows 7 cannot reach the portal securely
 
-## How To Test The Feature
-
-1. Run migration:
-
-```bash
-php artisan migrate
-```
-
-2. Clear config:
-
-```bash
-php artisan config:clear
-```
-
-3. Make sure MikroTik API is enabled.
-
-4. Make sure the portal server can reach:
-
-```text
-128.0.100.1:8728
-```
-
-5. Log in to the support portal.
-
-6. Visit:
-
-```text
-/internet-access
-```
-
-7. Create a request.
-
-8. The page should show username/password.
-
-9. The user should receive IPMsg.
-
-10. Connect using the generated username/password.
-
-11. Run this or wait for scheduler:
-
-```bash
-php artisan internet-access:sync
-```
-
-12. Refresh the page.
-
-The status should change from `ready` to `active`, and the countdown should start.
-
-## Common Problems
-
-### The page says MikroTik integration is disabled
-
-Check `.env`:
-
-```env
-MIKROTIK_ENABLED=true
-```
-
-Then run:
-
-```bash
-php artisan config:clear
-```
-
-### The request fails to create
-
-Check:
-
-- MikroTik IP is correct
-- MikroTik username is correct
-- MikroTik password is correct
-- MikroTik API service is enabled
-- port `8728` is reachable
-- selected MikroTik profile exists
-
-### Countdown does not start
-
-The scheduler may not be running.
-
-Run:
-
-```bash
-php artisan internet-access:sync
-```
-
-If that works, set up the scheduler.
-
-### IPMsg does not arrive
-
-Check:
-
-- user's IP address is correct
-- user's IPMsg app is open
-- UDP port `2425` is not blocked
-- Laravel logs for IPMsg warning messages
-
-## Sidebar Note
-
-This feature was intentionally not added to the user sidebar.
-
-Users can visit it only through the direct route:
-
-```text
-/internet-access
-```
-
-This matches the requested behavior: build the feature, but do not display it in the users sidebar.
-
+Confirm Windows 7 SP1 has current SHA-2, root certificate, Schannel, and TLS
+1.2 updates. The connector will not fall back to TLS 1.0.

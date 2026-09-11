@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="color-scheme" content="light dark">
+    @include('layout.pwa')
     <title>Login | CSCI Support Portal</title>
     <link rel="icon" href="{{ asset('assets/images/favicon.ico') }}" type="image/png" />
     <script>
@@ -418,6 +419,16 @@
                 <span>CSCI Support Portal.</span>
             </a>
             <div class="top-actions">
+                <button
+                    id="loginPwaInstallButton"
+                    type="button"
+                    class="btn-landing btn-primary-landing d-none"
+                    data-pwa-install
+                    aria-hidden="true"
+                    disabled
+                >
+                    <i class="bx bx-desktop me-1"></i>Install Portal App
+                </button>
                 <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">
                     <i class="bx bx-moon" id="themeToggleIcon"></i>
                 </button>

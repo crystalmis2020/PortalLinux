@@ -5,14 +5,20 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class InternetAccessRequest extends Model
 {
     use HasFactory;
 
+    public const STATUS_PENDING = 'pending';
+
     public const STATUS_READY = 'ready';
+
     public const STATUS_ACTIVE = 'active';
+
     public const STATUS_EXPIRED = 'expired';
+
     public const STATUS_FAILED = 'failed';
 
     protected $fillable = [
@@ -33,6 +39,10 @@ class InternetAccessRequest extends Model
         'failure_reason',
     ];
 
+    protected $hidden = [
+        'password',
+    ];
+
     protected function casts(): array
     {
         return [
@@ -40,12 +50,18 @@ class InternetAccessRequest extends Model
             'expires_at' => 'datetime',
             'expired_at' => 'datetime',
             'last_seen_online_at' => 'datetime',
+            'password' => 'encrypted',
         ];
     }
 
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function connectorTokens(): HasMany
+    {
+        return $this->hasMany(InternetAccessConnectorToken::class);
     }
 
     public function getRemainingSecondsAttribute(): int
@@ -59,6 +75,6 @@ class InternetAccessRequest extends Model
 
     public function isOpen(): bool
     {
-        return in_array($this->status, [self::STATUS_READY, self::STATUS_ACTIVE], true);
+        return in_array($this->status, [self::STATUS_PENDING, self::STATUS_READY, self::STATUS_ACTIVE], true);
     }
 }

@@ -1,5 +1,5 @@
 <VirtualHost *:80>
-    ServerName 128.0.254.20
+    ServerName 128.0.1.20
 
     ProxyPreserveHost On
     ProxyRequests Off

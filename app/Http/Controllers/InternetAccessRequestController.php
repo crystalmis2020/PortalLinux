@@ -7,16 +7,16 @@ use App\Services\Mikrotik\RouterOsClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
-use Throwable;
 
 class InternetAccessRequestController extends Controller
 {
     public function index(Request $request): View
     {
         $activeRequest = InternetAccessRequest::where('user_id', $request->user()->id)
-            ->whereIn('status', [InternetAccessRequest::STATUS_READY, InternetAccessRequest::STATUS_ACTIVE])
+            ->whereIn('status', [InternetAccessRequest::STATUS_PENDING, InternetAccessRequest::STATUS_READY, InternetAccessRequest::STATUS_ACTIVE])
             ->latest()
             ->first();
 
@@ -24,18 +24,22 @@ class InternetAccessRequestController extends Controller
             ->latest()
             ->paginate(10);
 
-        return view('internet-access.index', compact('activeRequest', 'requests'));
+        $pendingRequests = $request->user()->isAdmin()
+            ? InternetAccessRequest::with('user')->where('status', InternetAccessRequest::STATUS_PENDING)->oldest()->get()
+            : collect();
+
+        return view('internet-access.index', compact('activeRequest', 'requests', 'pendingRequests'));
     }
 
-    public function store(Request $request, RouterOsClient $mikrotik): RedirectResponse
+    public function store(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'requested_hours' => ['required', 'in:1h,2h,3h,8h'],
+            'requested_hours' => ['required', 'in:1h,4h'],
             'purpose' => ['required', 'string', 'max:1000'],
         ]);
 
         $existingRequest = InternetAccessRequest::where('user_id', $request->user()->id)
-            ->whereIn('status', [InternetAccessRequest::STATUS_READY, InternetAccessRequest::STATUS_ACTIVE])
+            ->whereIn('status', [InternetAccessRequest::STATUS_PENDING, InternetAccessRequest::STATUS_READY, InternetAccessRequest::STATUS_ACTIVE])
             ->latest()
             ->first();
 
@@ -46,51 +50,25 @@ class InternetAccessRequestController extends Controller
         }
 
         $username = $this->generateUsername($validated['requested_hours']);
+        $password = Str::random(24);
         $profile = config("mikrotik.profiles.{$validated['requested_hours']}");
         $duration = $this->durationMinutes($validated['requested_hours']);
 
-        $internetRequest = InternetAccessRequest::create([
+        InternetAccessRequest::create([
             'user_id' => $request->user()->id,
             'requester_ip' => $request->ip(),
             'purpose' => $validated['purpose'],
             'requested_hours' => $validated['requested_hours'],
             'duration_minutes' => $duration,
             'username' => $username,
-            'password' => $username,
+            'password' => $password,
             'mikrotik_profile' => $profile,
-            'status' => InternetAccessRequest::STATUS_READY,
+            'status' => InternetAccessRequest::STATUS_PENDING,
         ]);
 
-        try {
-            $referenceId = $mikrotik->createTemporaryAccess(
-                $username,
-                $username,
-                $profile,
-                $this->buildComment($request, $validated['purpose'])
-            );
-
-            $internetRequest->update(['mikrotik_reference_id' => $referenceId]);
-
-            sendIpMsgNotification(
-                "Your internet access is ready. Username: {$username} Password: {$username}",
-                $request->ip() ?: $request->user()->ip_address
-            );
-
-            return redirect()
-                ->route('internet-access.index')
-                ->with('success', 'Internet access created. Use the generated username and password to connect.');
-        } catch (Throwable $exception) {
-            report($exception);
-
-            $internetRequest->update([
-                'status' => InternetAccessRequest::STATUS_FAILED,
-                'failure_reason' => $exception->getMessage(),
-            ]);
-
-            return redirect()
-                ->route('internet-access.index')
-                ->with('error', 'Internet access was not created: '.$exception->getMessage());
-        }
+        return redirect()
+            ->route('internet-access.index')
+            ->with('success', 'Request submitted for approval. It will be approved automatically after one minute if an administrator does not act.');
     }
 
     public function status(Request $request, InternetAccessRequest $internetAccessRequest): JsonResponse
@@ -110,6 +88,56 @@ class InternetAccessRequestController extends Controller
         ]);
     }
 
+    public function approve(Request $request, InternetAccessRequest $internetAccessRequest, RouterOsClient $mikrotik): RedirectResponse
+    {
+        abort_unless($request->user()->isAdmin(), 403);
+
+        $this->provision($internetAccessRequest, $mikrotik);
+
+        return redirect()->route('internet-access.index')->with('success', 'Internet access request approved.');
+    }
+
+    public function provision(InternetAccessRequest $internetRequest, RouterOsClient $mikrotik): void
+    {
+        $provisioningException = null;
+
+        DB::transaction(function () use ($internetRequest, $mikrotik, &$provisioningException): void {
+            $lockedRequest = InternetAccessRequest::query()
+                ->lockForUpdate()
+                ->find($internetRequest->id);
+
+            if (! $lockedRequest || $lockedRequest->status !== InternetAccessRequest::STATUS_PENDING) {
+                return;
+            }
+
+            try {
+                $referenceId = $mikrotik->createTemporaryAccess(
+                    $lockedRequest->username,
+                    $lockedRequest->password,
+                    $lockedRequest->mikrotik_profile,
+                    $this->buildCommentFor($lockedRequest)
+                );
+
+                $lockedRequest->update([
+                    'status' => InternetAccessRequest::STATUS_READY,
+                    'mikrotik_reference_id' => $referenceId,
+                    'failure_reason' => null,
+                ]);
+            } catch (\Throwable $exception) {
+                $lockedRequest->update([
+                    'status' => InternetAccessRequest::STATUS_FAILED,
+                    'failure_reason' => $exception->getMessage(),
+                ]);
+                $provisioningException = $exception;
+            }
+        }, 3);
+
+        if ($provisioningException) {
+            report($provisioningException);
+            throw $provisioningException;
+        }
+    }
+
     protected function generateUsername(string $requestedHours): string
     {
         do {
@@ -123,17 +151,15 @@ class InternetAccessRequestController extends Controller
     {
         return match ($requestedHours) {
             '1h' => 60,
-            '2h' => 120,
-            '3h' => 180,
-            '8h' => 480,
+            '4h' => 240,
         };
     }
 
-    protected function buildComment(Request $request, string $purpose): string
+    protected function buildCommentFor(InternetAccessRequest $internetRequest): string
     {
-        $user = $request->user();
-        $name = $user->full_name ?: $user->username;
+        $user = $internetRequest->user;
+        $name = $user?->full_name ?: $user?->username ?: 'Unknown user';
 
-        return "{$name} ({$request->ip()}) purpose: {$purpose}";
+        return "{$name} ({$internetRequest->requester_ip}) purpose: {$internetRequest->purpose}";
     }
 }

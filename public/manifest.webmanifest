@@ -1,0 +1,46 @@
+{
+    "id": "/support/",
+    "name": "CSCI Support Portal",
+    "short_name": "Support Portal",
+    "description": "CSCI support services and approved internet access requests.",
+    "start_url": "/support/internet-access?source=pwa",
+    "scope": "/support/",
+    "display": "standalone",
+    "background_color": "#f3f7f2",
+    "theme_color": "#02681e",
+    "orientation": "any",
+    "categories": [
+        "business",
+        "productivity"
+    ],
+    "icons": [
+        {
+            "src": "/support/assets/images/pwa/icon-192.png?v=2",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "/support/assets/images/pwa/icon-512.png?v=2",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any"
+        }
+    ],
+    "shortcuts": [
+        {
+            "name": "Internet Access",
+            "short_name": "Internet",
+            "description": "Open internet access requests",
+            "url": "/support/internet-access?source=pwa-shortcut",
+            "icons": [
+                {
+                    "src": "/support/assets/images/pwa/icon-192.png?v=2",
+                    "sizes": "192x192",
+                    "type": "image/png"
+                }
+            ]
+        }
+    ],
+    "prefer_related_applications": false
+}

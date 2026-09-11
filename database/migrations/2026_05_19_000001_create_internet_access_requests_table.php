@@ -17,13 +17,13 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->string('requester_ip')->nullable();
             $table->text('purpose');
-            $table->enum('requested_hours', ['1h', '2h', '3h', '8h']);
+            $table->enum('requested_hours', ['1h', '4h']);
             $table->unsignedSmallInteger('duration_minutes');
             $table->string('username')->unique();
             $table->string('password');
             $table->string('mikrotik_profile');
             $table->string('mikrotik_reference_id')->nullable();
-            $table->enum('status', ['ready', 'active', 'expired', 'failed'])->default('ready')->index();
+            $table->enum('status', ['pending', 'ready', 'active', 'expired', 'failed'])->default('pending')->index();
             $table->timestamp('connected_at')->nullable();
             $table->timestamp('expires_at')->nullable()->index();
             $table->timestamp('expired_at')->nullable();

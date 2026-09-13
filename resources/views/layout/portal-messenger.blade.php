@@ -1534,8 +1534,11 @@
                 isTerminating: false,
                 incomingTimeoutId: null,
                 outgoingTimeoutId: null,
+                disconnectTimeoutId: null,
                 offer: null,
                 pendingCandidates: [],
+                outgoingCandidates: [],
+                localDescriptionSent: false,
                 peerConnection: null,
                 localStream: null,
                 remoteStream: null,
@@ -1948,6 +1951,9 @@
             state.call.isTerminating = false;
             state.call.offer = null;
             state.call.pendingCandidates = [];
+            state.call.outgoingCandidates = [];
+            state.call.localDescriptionSent = false;
+            clearCallDisconnectTimeout();
         }
 
         function scheduleIncomingCallTimeout(contact, senderId, callId) {
@@ -1964,7 +1970,7 @@
                     return;
                 }
 
-                await sendCallSignal(senderId, {
+                sendCallSignal(senderId, {
                     call_id: callId,
                     signal_type: 'reject',
                 }).catch(() => {});
@@ -2151,7 +2157,14 @@
             elements.pendingAttachmentMeta.textContent = formatFileSize(state.pendingAttachment.size);
         }
 
-        async function ensureLocalAudioStream() {
+        function isCurrentCall(callId, connection = null) {
+            return Boolean(callId)
+                && state.call.currentCallId === callId
+                && !state.call.isTerminating
+                && (!connection || state.call.peerConnection === connection);
+        }
+
+        async function ensureLocalAudioStream(callId) {
             if (!window.isSecureContext) {
                 throw new Error('Audio calling requires HTTPS or localhost so the browser can access the microphone.');
             }
@@ -2165,13 +2178,18 @@
             }
 
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            if (!isCurrentCall(callId)) {
+                stopStream(stream);
+                return null;
+            }
+
             state.call.localStream = stream;
             elements.localAudio.srcObject = stream;
             return stream;
         }
 
-        async function addQueuedIceCandidates() {
-            if (!state.call.peerConnection || !state.call.pendingCandidates.length) {
+        async function addQueuedIceCandidates(connection = state.call.peerConnection) {
+            if (!connection || !state.call.pendingCandidates.length) {
                 return;
             }
 
@@ -2179,8 +2197,11 @@
             state.call.pendingCandidates = [];
 
             for (const candidate of candidates) {
+                if (state.call.peerConnection !== connection) {
+                    return;
+                }
                 try {
-                    await state.call.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                    await connection.addIceCandidate(new RTCIceCandidate(candidate));
                 } catch (error) {
                     console.error('Unable to add queued ICE candidate.', error);
                 }
@@ -2270,7 +2291,30 @@
             };
         }
 
+        function clearCallDisconnectTimeout() {
+            if (state.call.disconnectTimeoutId) {
+                window.clearTimeout(state.call.disconnectTimeoutId);
+                state.call.disconnectTimeoutId = null;
+            }
+        }
+
+        function flushOutgoingIceCandidates(connection) {
+            if (state.call.peerConnection !== connection || !state.call.localDescriptionSent) {
+                return;
+            }
+
+            const candidates = state.call.outgoingCandidates.splice(0);
+            for (const candidate of candidates) {
+                sendCallSignal(state.call.partnerId, {
+                    call_id: state.call.currentCallId,
+                    signal_type: 'ice-candidate',
+                    candidate,
+                }).catch((error) => console.error('Unable to send ICE candidate.', error));
+            }
+        }
+
         function createPeerConnection() {
+            const callId = state.call.currentCallId;
             const connection = new RTCPeerConnection({
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
@@ -2283,42 +2327,56 @@
             elements.remoteAudio.srcObject = remoteStream;
 
             connection.ontrack = (event) => {
-                event.streams[0]?.getTracks().forEach((track) => {
+                if (!isCurrentCall(callId, connection)) {
+                    return;
+                }
+                (event.streams[0]?.getTracks() || [event.track]).forEach((track) => {
                     remoteStream.addTrack(track);
                 });
             };
 
             connection.onicecandidate = (event) => {
-                if (!event.candidate || !state.call.partnerId || !state.call.currentCallId) {
+                if (!event.candidate || !isCurrentCall(callId, connection)) {
                     return;
                 }
 
-                sendCallSignal(state.call.partnerId, {
-                    call_id: state.call.currentCallId,
-                    signal_type: 'ice-candidate',
-                    candidate: event.candidate.toJSON ? event.candidate.toJSON() : {
-                        candidate: event.candidate.candidate,
-                        sdpMid: event.candidate.sdpMid,
-                        sdpMLineIndex: event.candidate.sdpMLineIndex,
-                    },
-                }).catch(() => {});
+                state.call.outgoingCandidates.push(event.candidate.toJSON ? event.candidate.toJSON() : {
+                    candidate: event.candidate.candidate,
+                    sdpMid: event.candidate.sdpMid,
+                    sdpMLineIndex: event.candidate.sdpMLineIndex,
+                });
+                // The recipient must register the offer before receiving its candidates.
+                flushOutgoingIceCandidates(connection);
             };
 
             connection.onconnectionstatechange = () => {
                 const nextState = connection.connectionState;
 
-                if (state.call.isTerminating) {
+                if (!isCurrentCall(callId, connection)) {
                     return;
                 }
 
                 if (nextState === 'connected') {
+                    clearCallDisconnectTimeout();
                     clearOutgoingCallTimeout();
                     const contact = getContactById(state.call.partnerId);
                     setCallPresentation(contact, 'Connected', 'connected');
                     return;
                 }
 
-                if (['failed', 'closed', 'disconnected'].includes(nextState)) {
+                if (nextState === 'disconnected') {
+                    if (!state.call.disconnectTimeoutId) {
+                        state.call.disconnectTimeoutId = window.setTimeout(() => {
+                            state.call.disconnectTimeoutId = null;
+                            if (isCurrentCall(callId, connection) && connection.connectionState === 'disconnected') {
+                                finishCallSession({ sendHangup: true, toast: 'Audio call connection was lost.' });
+                            }
+                        }, 10000);
+                    }
+                    return;
+                }
+
+                if (['failed', 'closed'].includes(nextState)) {
                     finishCallSession({
                         remote: false,
                         toast: nextState === 'failed' ? 'Audio call failed.' : 'Audio call ended.',
@@ -2331,8 +2389,11 @@
             return connection;
         }
 
-        async function preparePeerConnection() {
-            const stream = await ensureLocalAudioStream();
+        async function preparePeerConnection(callId) {
+            const stream = await ensureLocalAudioStream(callId);
+            if (!stream || !isCurrentCall(callId)) {
+                return null;
+            }
             const connection = createPeerConnection();
 
             stream.getTracks().forEach((track) => {
@@ -2448,16 +2509,27 @@
 
             state.call.partnerId = Number(state.selectedUserId);
             state.call.currentCallId = generateCallId();
+            const callId = state.call.currentCallId;
+            const partnerId = state.call.partnerId;
 
             setCallPresentation(contact, 'Calling...', 'calling');
 
             try {
-                const connection = await preparePeerConnection();
+                const connection = await preparePeerConnection(callId);
+                if (!connection || !isCurrentCall(callId, connection)) {
+                    return;
+                }
                 const offer = await connection.createOffer({
                     offerToReceiveAudio: true,
                 });
+                if (!isCurrentCall(callId, connection)) {
+                    return;
+                }
 
                 await connection.setLocalDescription(offer);
+                if (!isCurrentCall(callId, connection)) {
+                    return;
+                }
 
                 const localDescription = connection.localDescription?.toJSON
                     ? connection.localDescription.toJSON()
@@ -2472,17 +2544,29 @@
                     throw new Error('Unable to prepare the outgoing call offer.');
                 }
 
-                await sendCallSignal(state.call.partnerId, {
-                    call_id: state.call.currentCallId,
+                await sendCallSignal(partnerId, {
+                    call_id: callId,
                     signal_type: 'offer',
                     sdp: encodedDescription,
                 });
 
-                setCallPresentation(contact, 'Ringing...', 'ringing');
-                scheduleOutgoingCallTimeout(contact, state.call.partnerId, state.call.currentCallId);
+                if (!isCurrentCall(callId, connection)) {
+                    // Hangup may have reached the server before the offer completed.
+                    sendCallSignal(partnerId, { call_id: callId, signal_type: 'hangup' }).catch(() => {});
+                    return;
+                }
+                state.call.localDescriptionSent = true;
+                flushOutgoingIceCandidates(connection);
+                if (state.call.mode === 'calling') {
+                    setCallPresentation(contact, 'Ringing...', 'ringing');
+                    scheduleOutgoingCallTimeout(contact, partnerId, callId);
+                }
             } catch (error) {
+                if (!isCurrentCall(callId)) {
+                    return;
+                }
                 console.error('Unable to start audio call.', error);
-                await finishCallSession();
+                await finishCallSession({ sendHangup: true });
 
                 if (window.Lobibox) {
                     Lobibox.notify('error', {
@@ -2503,6 +2587,9 @@
                 return;
             }
 
+            const callId = state.call.currentCallId;
+            const partnerId = state.call.partnerId;
+            const offer = state.call.offer;
             const contact = getContactById(state.call.partnerId) || {
                 id: state.call.partnerId,
                 full_name: state.call.partnerName,
@@ -2516,18 +2603,33 @@
             setCallPresentation(contact, 'Connecting...', 'connecting');
 
             try {
-                const connection = await preparePeerConnection();
-                const remoteOffer = normalizeSessionDescription(state.call.offer, 'offer');
+                const connection = await preparePeerConnection(callId);
+                if (!connection || !isCurrentCall(callId, connection)) {
+                    return;
+                }
+                const remoteOffer = normalizeSessionDescription(offer, 'offer');
 
                 if (!remoteOffer) {
                     throw new Error('Incoming call offer is incomplete.');
                 }
 
                 await connection.setRemoteDescription(remoteOffer);
-                await addQueuedIceCandidates();
+                if (!isCurrentCall(callId, connection)) {
+                    return;
+                }
+                await addQueuedIceCandidates(connection);
+                if (!isCurrentCall(callId, connection)) {
+                    return;
+                }
 
                 const answer = await connection.createAnswer();
+                if (!isCurrentCall(callId, connection)) {
+                    return;
+                }
                 await connection.setLocalDescription(answer);
+                if (!isCurrentCall(callId, connection)) {
+                    return;
+                }
 
                 const localDescription = connection.localDescription?.toJSON
                     ? connection.localDescription.toJSON()
@@ -2542,19 +2644,24 @@
                     throw new Error('Unable to prepare the call answer.');
                 }
 
-                await sendCallSignal(state.call.partnerId, {
-                    call_id: state.call.currentCallId,
+                await sendCallSignal(partnerId, {
+                    call_id: callId,
                     signal_type: 'answer',
                     sdp: encodedDescription,
                 });
-            } catch (error) {
-                console.error('Unable to answer call.', error);
-                if (state.call.partnerId && state.call.currentCallId) {
-                    await sendCallSignal(state.call.partnerId, {
-                        call_id: state.call.currentCallId,
-                        signal_type: 'reject',
-                    }).catch(() => {});
+                if (isCurrentCall(callId, connection)) {
+                    state.call.localDescriptionSent = true;
+                    flushOutgoingIceCandidates(connection);
                 }
+            } catch (error) {
+                if (!isCurrentCall(callId)) {
+                    return;
+                }
+                console.error('Unable to answer call.', error);
+                sendCallSignal(partnerId, {
+                    call_id: callId,
+                    signal_type: 'reject',
+                }).catch(() => {});
 
                 await finishCallSession();
 
@@ -2574,7 +2681,7 @@
 
         async function rejectIncomingCall() {
             if (state.call.partnerId && state.call.currentCallId) {
-                await sendCallSignal(state.call.partnerId, {
+                sendCallSignal(state.call.partnerId, {
                     call_id: state.call.currentCallId,
                     signal_type: 'reject',
                 }).catch(() => {});
@@ -2639,16 +2746,28 @@
             }
 
             if (signal.signal_type === 'answer' && state.call.peerConnection && signal.sdp) {
+                const connection = state.call.peerConnection;
                 clearOutgoingCallTimeout();
                 const remoteAnswer = normalizeSessionDescription(signal.sdp, 'answer');
 
-                if (!remoteAnswer) {
-                    throw new Error('Incoming call answer is incomplete.');
+                try {
+                    if (!remoteAnswer) {
+                        throw new Error('Incoming call answer is incomplete.');
+                    }
+                    await connection.setRemoteDescription(remoteAnswer);
+                    if (!isCurrentCall(signal.call_id, connection)) {
+                        return;
+                    }
+                    await addQueuedIceCandidates(connection);
+                    if (isCurrentCall(signal.call_id, connection) && state.call.mode !== 'connected') {
+                        setCallPresentation(contact, 'Connecting...', 'connecting');
+                    }
+                } catch (error) {
+                    console.error('Unable to apply call answer.', error);
+                    if (isCurrentCall(signal.call_id, connection)) {
+                        await finishCallSession({ sendHangup: true, toast: 'Unable to connect the audio call.' });
+                    }
                 }
-
-                await state.call.peerConnection.setRemoteDescription(remoteAnswer);
-                await addQueuedIceCandidates();
-                setCallPresentation(contact, 'Connecting...', 'connecting');
                 return;
             }
 

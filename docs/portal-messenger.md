@@ -165,6 +165,20 @@ These refresh paths pass `{ preserveScroll: true }`:
 - Selecting a contact from the list still opens at the newest message.
 - Sending a message still scrolls to the bottom.
 
+## Audio Call Regression Checks
+
+Audio calls exchange offers, answers, and ICE candidates through realtime signaling. Local ICE candidates are buffered until the offer or answer has been delivered, so an incoming call is registered before its candidates arrive. A temporary disconnection gets 10 seconds to recover; a failed connection still ends the call immediately.
+
+Call setup checks the active call after asynchronous microphone and connection operations. Hanging up while microphone permission is pending stops a late stream, and callbacks from ended calls cannot change a newer call.
+
+Run the browser timing regression tests without a database or microphone:
+
+```bash
+node tests/js/messenger-call.test.mjs
+```
+
+For manual verification, refresh both participants' portal pages, place and answer an audio call, confirm audio in both directions, and hang up. Also check cancellation while microphone permission is open and recovery after a brief network interruption. These automated tests mock browser media and signaling; they do not verify network connectivity or actual audio playback.
+
 ## Online Status Logic
 
 MISsenger does not treat `is_login` by itself as the final source of truth for presence.

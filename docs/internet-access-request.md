@@ -9,8 +9,8 @@ change from PPPoE or any automatic firewall/Hotspot configuration.
 1. The user selects **Internet Access** in the portal sidebar (route
    `/internet-access`).
 2. The user selects one or four hours, enters a purpose, and submits a request.
-3. An administrator can approve immediately. The scheduler approves a still
-   pending request automatically after one minute.
+3. Submission automatically approves and provisions the request immediately.
+   The scheduler retries requests left pending for at least one minute.
 4. Approval creates a temporary PPPoE secret in MikroTik and changes the
    request from `pending` to `ready`.
 5. The page displays **Connect**. It never displays the PPPoE username or
@@ -80,7 +80,7 @@ POST /api/internet-access/connector/verify
 
 The API routes do not accept a portal session as connector authorization. They
 require a random bearer token issued to the authenticated owner of a `ready`
-request, and they are explicitly rate-limited.
+request (or an active request with time remaining), and they are explicitly rate-limited.
 
 ## Environment Configuration
 
@@ -177,7 +177,7 @@ The server must run Laravel's scheduler, for example:
 
 The command:
 
-- automatically approves old pending requests;
+- recovers requests left pending for at least one minute;
 - detects connected PPPoE users as a fallback to immediate connector
   verification;
 - starts the timer only after router confirmation;
@@ -289,7 +289,7 @@ boundary.
 
 ## Status Meanings
 
-- `pending`: waiting for administrator or one-minute automatic approval.
+- `pending`: provisioning has not completed; the scheduler recovers older pending requests.
 - `ready`: the PPPoE secret exists and the Connect button is available.
 - `active`: MikroTik confirmed the PPPoE session and the timer is running.
 - `expired`: the allowed duration ended and the PPPoE secret was removed.
@@ -314,7 +314,7 @@ connector accepts only that exact URL shape and sends the token to its fixed
 installed portal origin. Credential responses are marked `no-store`.
 
 The exchange is rejected when the token is malformed, unknown, expired,
-already used, belongs to a request that is no longer ready, or fails the
+already used, belongs to a request that is neither ready nor active with time remaining, or fails the
 configured IP binding. All these cases return the same generic authentication
 failure so the endpoint does not reveal token state.
 
@@ -383,3 +383,13 @@ visible under `/ppp/active`.
 
 Confirm Windows 7 SP1 has current SHA-2, root certificate, Schannel, and TLS
 1.2 updates. The connector will not fall back to TLS 1.0.
+
+## Reconnecting after a disconnect
+
+While an active request has time remaining, the page offers **Reconnect**.
+It launches the Windows connector with a new one-time token and the existing
+PPPoE credentials. Reconnection keeps the original start and expiration times;
+the countdown continues during disconnection. No new request is needed.
+The connector checks MikroTik again to confirm reconnection. Reconnect tokens
+cannot be issued or exchanged once the access time has elapsed, even before
+the scheduler finishes cleanup.

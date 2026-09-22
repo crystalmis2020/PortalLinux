@@ -31,7 +31,7 @@ class InternetAccessRequestController extends Controller
         return view('internet-access.index', compact('activeRequest', 'requests', 'pendingRequests'));
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, RouterOsClient $mikrotik): RedirectResponse
     {
         $validated = $request->validate([
             'requested_hours' => ['required', 'in:1h,4h'],
@@ -54,7 +54,7 @@ class InternetAccessRequestController extends Controller
         $profile = config("mikrotik.profiles.{$validated['requested_hours']}");
         $duration = $this->durationMinutes($validated['requested_hours']);
 
-        InternetAccessRequest::create([
+        $internetRequest = InternetAccessRequest::create([
             'user_id' => $request->user()->id,
             'requester_ip' => $request->ip(),
             'purpose' => $validated['purpose'],
@@ -66,9 +66,18 @@ class InternetAccessRequestController extends Controller
             'status' => InternetAccessRequest::STATUS_PENDING,
         ]);
 
+        try {
+            $this->provision($internetRequest, $mikrotik);
+        } catch (\Throwable) {
+            // provision() records and reports the router failure.
+            return redirect()
+                ->route('internet-access.index')
+                ->with('error', 'Internet access could not be prepared. Please try again or contact MIS.');
+        }
+
         return redirect()
             ->route('internet-access.index')
-            ->with('success', 'Request submitted for approval. It will be approved automatically after one minute if an administrator does not act.');
+            ->with('success', 'Request automatically approved. Click Connect to start your internet access.');
     }
 
     public function status(Request $request, InternetAccessRequest $internetAccessRequest): JsonResponse

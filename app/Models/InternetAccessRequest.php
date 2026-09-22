@@ -73,6 +73,14 @@ class InternetAccessRequest extends Model
         return max(0, now()->diffInSeconds($this->expires_at, false));
     }
 
+    public function canConnect(): bool
+    {
+        return $this->status === self::STATUS_READY
+            || ($this->status === self::STATUS_ACTIVE
+                && $this->expires_at !== null
+                && $this->expires_at->isFuture());
+    }
+
     public function isOpen(): bool
     {
         return in_array($this->status, [self::STATUS_PENDING, self::STATUS_READY, self::STATUS_ACTIVE], true);

@@ -38,7 +38,7 @@
     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
         <div>
             <h4 class="mb-1">Internet Access Request</h4>
-            <p class="text-muted mb-0">Temporary MikroTik access with administrator approval and one-minute automatic approval.</p>
+            <p class="text-muted mb-0">Temporary MikroTik access with immediate automatic approval.</p>
         </div>
         <div class="d-flex flex-wrap gap-2">
             <button
@@ -366,6 +366,8 @@ document.addEventListener('DOMContentLoaded', function () {
     let preparingLaunch = false;
     let launchRefreshTimer = null;
     let connectorLaunchFallbackTimer = null;
+    let reconnecting = false;
+    let launchInProgress = false;
     let fastPollTimer = null;
 
     const connectorLaunchModal = connectorLaunchModalElement && typeof bootstrap !== 'undefined'
@@ -410,6 +412,8 @@ document.addEventListener('DOMContentLoaded', function () {
             'Opening Windows connector',
             'Please wait while the saved Broadband Connection is started.'
         );
+        reconnecting = currentStatus === 'active';
+        launchInProgress = true;
         showConnectorLaunchModal();
 
         if (isRunningAsPwa()) {
@@ -433,18 +437,21 @@ document.addEventListener('DOMContentLoaded', function () {
             }, 5000);
         }
 
+        launchUri = null;
+
         window.clearTimeout(connectorLaunchFallbackTimer);
         connectorLaunchFallbackTimer = window.setTimeout(function () {
-            if (currentStatus !== 'ready') {
+            launchInProgress = false;
+            if (!['ready', 'active'].includes(currentStatus)) {
                 return;
             }
 
             setConnectorModalState(
                 'warning',
-                'Connector did not respond yet',
-                'Windows has not confirmed the PPPoE connection. Check the connector prompt and try again.'
+                reconnecting ? 'Check your connection' : 'Connector did not respond yet',
+                reconnecting ? 'Check the Windows connector for the reconnection result. Your original countdown continues.' : 'Windows has not confirmed the PPPoE connection. Check the connector prompt and try again.'
             );
-            setConnectButton(true, 'Connect');
+            setConnectButton(false, 'Prepare a new connection link');
             retryConnectorButton.classList.remove('d-none');
         }, 10000);
     }
@@ -489,22 +496,24 @@ document.addEventListener('DOMContentLoaded', function () {
         if (currentStatus === 'pending') {
             retryConnectorButton.classList.add('d-none');
             connectionDot.classList.add('bg-warning');
-            connectionLabel.textContent = 'Waiting for administrator approval';
-            accessMeta.textContent = 'Automatic approval runs after one minute.';
+            connectionLabel.textContent = 'Preparing internet access';
+            accessMeta.textContent = 'Your request is being prepared automatically.';
             timerDisplay.textContent = '--:--:--';
-            approvalNotice.textContent = 'Waiting for administrator approval. This request will be approved automatically one minute after submission.';
+            approvalNotice.textContent = 'Your request is being prepared automatically. If it remains pending, the system will retry shortly.';
             approvalNotice.classList.remove('d-none');
         } else if (currentStatus === 'active') {
             retryConnectorButton.classList.add('d-none');
-            window.clearTimeout(connectorLaunchFallbackTimer);
-            setConnectorModalState(
-                'success',
-                'Internet connected',
-                'The Broadband Connection is active and the countdown has started.'
-            );
-            rememberSuccessfulConnectorLaunch();
+            if (connectorLaunchTitle.textContent === 'Opening Windows connector' && !reconnecting) {
+                window.clearTimeout(connectorLaunchFallbackTimer);
+                launchInProgress = false;
+                launchExpiresAt = 0;
+                setConnectorModalState('success', 'Internet connected', 'Your internet access countdown has started.');
+                rememberSuccessfulConnectorLaunch();
+            }
+            connectorActions.classList.remove('d-none');
+            prepareConnectorLaunch();
             connectionDot.classList.add('bg-success');
-            connectionLabel.textContent = 'Connected. Countdown is running.';
+            connectionLabel.textContent = 'Access time remaining. If disconnected, click Reconnect.';
             accessMeta.textContent = payload.expires_at ? `Expires at ${new Date(payload.expires_at).toLocaleString()}` : '';
         } else if (currentStatus === 'ready') {
             connectionDot.classList.add('bg-info');
@@ -554,7 +563,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     async function prepareConnectorLaunch(force) {
-        if (currentStatus !== 'ready' || preparingLaunch) {
+        if (!['ready', 'active'].includes(currentStatus) || preparingLaunch || launchInProgress) {
             return;
         }
 
@@ -564,7 +573,10 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        if (!force && launchUri && launchExpiresAt > Date.now()) {
+        if (!force && launchExpiresAt > Date.now()) {
+            if (!launchUri) {
+                retryConnectorButton.classList.remove('d-none');
+            }
             return;
         }
 
@@ -591,7 +603,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             launchUri = payload.launch_uri;
             launchExpiresAt = new Date(payload.expires_at).getTime();
-            setConnectButton(true, 'Connect');
+            setConnectButton(true, currentStatus === 'active' ? 'Reconnect' : 'Connect');
 
             window.clearTimeout(launchRefreshTimer);
             launchRefreshTimer = window.setTimeout(function () {

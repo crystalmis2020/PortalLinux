@@ -34,7 +34,7 @@ class InternetAccessConnectorController extends Controller
 
             abort_unless($lockedRequest->user_id === $request->user()->id, 403);
 
-            if ($lockedRequest->status !== InternetAccessRequest::STATUS_READY) {
+            if (! $lockedRequest->canConnect()) {
                 throw new HttpException(409, 'This internet access request is not ready to connect.');
             }
 
@@ -126,13 +126,6 @@ class InternetAccessConnectorController extends Controller
 
         $internetRequest = $connectorToken->internetAccessRequest;
 
-        if ($internetRequest->status === InternetAccessRequest::STATUS_ACTIVE) {
-            return response()->json([
-                'connected' => true,
-                'status' => InternetAccessRequest::STATUS_ACTIVE,
-            ])->withHeaders($this->noStoreHeaders());
-        }
-
         try {
             $connected = $mikrotik->isUserConnected($internetRequest->username);
         } catch (\Throwable $exception) {
@@ -143,11 +136,28 @@ class InternetAccessConnectorController extends Controller
             ], 503)->withHeaders($this->noStoreHeaders());
         }
 
+        $internetRequest->refresh();
+
+        if (! $internetRequest->canConnect()) {
+            return response()->json([
+                'message' => 'This internet access request is no longer available.',
+            ], 409)->withHeaders($this->noStoreHeaders());
+        }
+
         if (! $connected) {
             return response()->json([
                 'connected' => false,
-                'status' => InternetAccessRequest::STATUS_READY,
+                'status' => $internetRequest->status,
             ], 202)->withHeaders($this->noStoreHeaders());
+        }
+
+        if ($internetRequest->status === InternetAccessRequest::STATUS_ACTIVE) {
+            $internetRequest->update(['last_seen_online_at' => now()]);
+
+            return response()->json([
+                'connected' => true,
+                'status' => InternetAccessRequest::STATUS_ACTIVE,
+            ])->withHeaders($this->noStoreHeaders());
         }
 
         $connectedAt = now();
@@ -247,7 +257,7 @@ class InternetAccessConnectorController extends Controller
             return false;
         }
 
-        if ($token->internetAccessRequest?->status !== InternetAccessRequest::STATUS_READY) {
+        if (! $token->internetAccessRequest?->canConnect()) {
             return false;
         }
 
@@ -264,10 +274,7 @@ class InternetAccessConnectorController extends Controller
             return false;
         }
 
-        if (! in_array($token->internetAccessRequest?->status, [
-            InternetAccessRequest::STATUS_READY,
-            InternetAccessRequest::STATUS_ACTIVE,
-        ], true)) {
+        if (! $token->internetAccessRequest?->canConnect()) {
             return false;
         }
 

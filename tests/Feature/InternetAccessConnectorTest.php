@@ -202,7 +202,7 @@ class InternetAccessConnectorTest extends TestCase
 
         $mikrotik = Mockery::mock(RouterOsClient::class);
         $mikrotik->shouldReceive('isUserConnected')
-            ->once()
+            ->twice()
             ->with($internetRequest->username)
             ->andReturn(true);
         $this->app->instance(RouterOsClient::class, $mikrotik);
@@ -312,6 +312,88 @@ class InternetAccessConnectorTest extends TestCase
         }
 
         $archive->close();
+    }
+
+    public function test_active_request_can_reconnect_without_resetting_its_expiration(): void
+    {
+        $user = $this->user('requester');
+        $internetRequest = $this->internetRequest($user, InternetAccessRequest::STATUS_ACTIVE);
+        $internetRequest->update(['connected_at' => now()->subMinutes(20), 'expires_at' => now()->addMinutes(40)]);
+        $originalExpiry = $internetRequest->expires_at->copy();
+        $originalConnection = $internetRequest->connected_at->copy();
+        $token = $this->issueToken($user, $internetRequest, '10.0.0.20');
+
+        $this->withToken($token)->withServerVariables(['REMOTE_ADDR' => '10.0.0.20'])
+            ->postJson(route('api.internet-access.connector.exchange'), $this->connectorPayload())
+            ->assertOk()->assertJson(['username' => $internetRequest->username]);
+
+        $mikrotik = Mockery::mock(RouterOsClient::class);
+        $mikrotik->shouldReceive('isUserConnected')->twice()->andReturn(false, true);
+        $this->app->instance(RouterOsClient::class, $mikrotik);
+
+        $this->withToken($token)
+            ->postJson(route('api.internet-access.connector.verify'), $this->connectorPayload())
+            ->assertStatus(202)->assertJson(['connected' => false, 'status' => 'active']);
+        $this->withToken($token)
+            ->postJson(route('api.internet-access.connector.verify'), $this->connectorPayload())
+            ->assertOk()->assertJson(['connected' => true, 'status' => 'active']);
+
+        $internetRequest->refresh();
+        $this->assertTrue($originalExpiry->equalTo($internetRequest->expires_at));
+        $this->assertTrue($originalConnection->equalTo($internetRequest->connected_at));
+    }
+
+    public function test_reconnect_is_rejected_when_time_runs_out_before_scheduler_cleanup(): void
+    {
+        $user = $this->user('requester');
+        $internetRequest = $this->internetRequest($user, InternetAccessRequest::STATUS_ACTIVE);
+        $internetRequest->update(['connected_at' => now()->subHour(), 'expires_at' => now()->addSeconds(5)]);
+        $token = $this->issueToken($user, $internetRequest, '10.0.0.20');
+        $this->travel(6)->seconds();
+
+        $this->actingAs($user)->postJson(route('internet-access.connector.token', $internetRequest))
+            ->assertConflict();
+        $this->withToken($token)->withServerVariables(['REMOTE_ADDR' => '10.0.0.20'])
+            ->postJson(route('api.internet-access.connector.exchange'), $this->connectorPayload())
+            ->assertUnauthorized();
+    }
+
+    public function test_submission_immediately_provisions_access_without_starting_the_timer(): void
+    {
+        $user = $this->user('requester');
+        $mikrotik = Mockery::mock(RouterOsClient::class);
+        $mikrotik->shouldReceive('createTemporaryAccess')->once()->andReturn('*immediate-secret');
+        $this->app->instance(RouterOsClient::class, $mikrotik);
+
+        $this->actingAs($user)->post(route('internet-access.store'), [
+            'requested_hours' => '1h',
+            'purpose' => 'Work research',
+        ])->assertRedirect(route('internet-access.index'))->assertSessionHas('success');
+
+        $internetRequest = InternetAccessRequest::where('user_id', $user->id)->sole();
+        $this->assertSame(InternetAccessRequest::STATUS_READY, $internetRequest->status);
+        $this->assertSame('*immediate-secret', $internetRequest->mikrotik_reference_id);
+        $this->assertNull($internetRequest->connected_at);
+        $this->assertNull($internetRequest->expires_at);
+    }
+
+    public function test_submission_reports_provisioning_failure_without_claiming_approval(): void
+    {
+        $user = $this->user('requester');
+        $mikrotik = Mockery::mock(RouterOsClient::class);
+        $mikrotik->shouldReceive('createTemporaryAccess')->once()
+            ->andThrow(new \RuntimeException('Router unavailable'));
+        $this->app->instance(RouterOsClient::class, $mikrotik);
+
+        $this->actingAs($user)->post(route('internet-access.store'), [
+            'requested_hours' => '4h',
+            'purpose' => 'Work research',
+        ])->assertRedirect(route('internet-access.index'))
+            ->assertSessionHas('error')->assertSessionMissing('success');
+
+        $internetRequest = InternetAccessRequest::where('user_id', $user->id)->sole();
+        $this->assertSame(InternetAccessRequest::STATUS_FAILED, $internetRequest->status);
+        $this->assertNull($internetRequest->expires_at);
     }
 
     public function test_stale_approval_attempts_provision_a_request_only_once(): void

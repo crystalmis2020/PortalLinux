@@ -436,6 +436,115 @@ class InternetAccessConnectorTest extends TestCase
         ];
     }
 
+    public function test_request_records_are_restricted_to_administrators(): void
+    {
+        $user = $this->user('requester');
+        $record = $this->internetRequest($user);
+
+        $this->get(route('internet-access.admin.index'))->assertRedirect(route('login'));
+        $this->delete(route('internet-access.admin.destroy', $record))->assertRedirect(route('login'));
+        $this->actingAs($user)->get(route('internet-access.admin.index'))->assertForbidden();
+        $this->delete(route('internet-access.admin.destroy', $record))->assertForbidden();
+        $this->assertModelExists($record);
+    }
+
+    public function test_admin_can_delete_a_request_and_its_connector_tokens(): void
+    {
+        $admin = $this->user('admin');
+        $admin->update(['user_type' => 'admin']);
+        $record = $this->internetRequest($this->user('requester'));
+        $otherRecord = $this->internetRequest($admin);
+        $token = $record->connectorTokens()->create([
+            'token_hash' => hash('sha256', 'delete-test'),
+            'expires_at' => now()->addMinutes(2),
+        ]);
+        $this->mock(RouterOsClient::class, function ($mock) use ($record): void {
+            $mock->shouldReceive('removeAccess')->once()->with($record->username);
+        });
+
+        $this->actingAs($admin)->delete(route('internet-access.admin.destroy', $record))
+            ->assertRedirect(route('internet-access.admin.index'))->assertSessionHas('success');
+
+        $this->assertModelMissing($record);
+        $this->assertModelMissing($token);
+        $this->assertModelExists($otherRecord);
+    }
+
+    public function test_admin_records_include_all_users_and_statuses_with_pagination(): void
+    {
+        $admin = $this->user('admin');
+        $admin->update(['user_type' => 'admin']);
+        $owner = $this->user('requester');
+        $yesterday = $this->internetRequest($owner);
+        $yesterday->forceFill(['created_at' => now()->startOfDay()->subSecond()])->save();
+        $tomorrow = $this->internetRequest($owner);
+        $tomorrow->forceFill(['created_at' => now()->addDay()->startOfDay()])->save();
+        foreach (range(1, 21) as $number) {
+            $this->internetRequest($number % 2 ? $owner : $admin,
+                $number % 2 ? InternetAccessRequest::STATUS_EXPIRED : InternetAccessRequest::STATUS_ACTIVE);
+        }
+
+        $request = \Illuminate\Http\Request::create('/internet-access/admin');
+        $request->setUserResolver(fn () => $admin);
+        $view = app(InternetAccessRequestController::class)->adminIndex($request);
+        $records = $view->getData()['requests'];
+
+        $this->assertSame('internet-access.admin', $view->name());
+        $this->assertSame(21, $records->total());
+        $this->assertCount(20, $records);
+        $this->assertCount(2, $records->getCollection()->pluck('user_id')->unique());
+        $this->assertCount(2, $records->getCollection()->pluck('status')->unique());
+        $this->assertTrue($records->first()->relationLoaded('user'));
+    }
+
+    public function test_admin_search_only_matches_today_and_keeps_search_in_pagination(): void
+    {
+        $admin = $this->user('admin');
+        $admin->update(['user_type' => 'admin']);
+        $owner = $this->user('requester');
+        $today = $this->internetRequest($owner);
+        $old = $this->internetRequest($owner);
+        $old->forceFill(['created_at' => now()->subDay()])->save();
+
+        foreach (['Requester User', 'requester', '192.0.2.10', 'Feature test', 'no-match'] as $search) {
+            $request = \Illuminate\Http\Request::create('/internet-access/admin', 'GET', ['search' => $search]);
+            $request->setUserResolver(fn () => $admin);
+            $records = app(InternetAccessRequestController::class)->adminIndex($request)->getData()['requests'];
+
+            $this->assertSame($search === 'no-match' ? [] : [$today->id], $records->getCollection()->modelKeys());
+            parse_str(parse_url($records->url(2), PHP_URL_QUERY), $query);
+            $this->assertSame($search, $query['search']);
+            $this->assertSame('2', $query['page']);
+        }
+    }
+
+    public function test_router_failure_preserves_the_request_record(): void
+    {
+        $admin = $this->user('admin');
+        $admin->update(['user_type' => 'admin']);
+        $record = $this->internetRequest($admin);
+        $this->mock(RouterOsClient::class, function ($mock): void {
+            $mock->shouldReceive('removeAccess')->once()->andThrow(new \RuntimeException('Router unavailable'));
+        });
+
+        $this->actingAs($admin)->delete(route('internet-access.admin.destroy', $record))
+            ->assertRedirect(route('internet-access.admin.index'))->assertSessionHas('error');
+
+        $this->assertModelExists($record);
+    }
+
+    public function test_admin_can_delete_expired_records_without_contacting_the_router(): void
+    {
+        $admin = $this->user('admin');
+        $admin->update(['user_type' => 'admin']);
+        $record = $this->internetRequest($admin, InternetAccessRequest::STATUS_EXPIRED);
+        $this->mock(RouterOsClient::class, fn ($mock) => $mock->shouldNotReceive('removeAccess'));
+
+        $this->actingAs($admin)->delete(route('internet-access.admin.destroy', $record))
+            ->assertSessionHas('success');
+        $this->assertModelMissing($record);
+    }
+
     private function user(string $username): User
     {
         return User::withoutEvents(fn () => User::query()->create([

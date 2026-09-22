@@ -59,6 +59,8 @@ Route::middleware(['auth'])->prefix('messenger')->name('messenger.')->controller
 
 Route::middleware(['auth'])->prefix('internet-access')->name('internet-access.')->controller(InternetAccessRequestController::class)->group(function () {
     Route::get('/', 'index')->name('index');
+    Route::get('/admin', 'adminIndex')->name('admin.index');
+    Route::delete('/admin/{internetAccessRequest}', 'destroy')->name('admin.destroy');
     Route::post('/', 'store')->name('store');
     Route::post('/{internetAccessRequest}/approve', 'approve')->name('approve');
     Route::get('/status/{internetAccessRequest}', 'status')->name('status');

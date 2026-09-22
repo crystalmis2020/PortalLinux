@@ -41,6 +41,9 @@
             <p class="text-muted mb-0">Temporary MikroTik access with immediate automatic approval.</p>
         </div>
         <div class="d-flex flex-wrap gap-2">
+            @if(auth()->user()->isAdmin())
+                <a class="btn btn-sm btn-outline-primary" href="{{ route('internet-access.admin.index') }}">Today's Requests</a>
+            @endif
             <button
                 id="pwaInstallButton"
                 type="button"

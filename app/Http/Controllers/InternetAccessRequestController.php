@@ -13,6 +13,57 @@ use Illuminate\View\View;
 
 class InternetAccessRequestController extends Controller
 {
+    public function adminIndex(Request $request): View
+    {
+        abort_unless($request->user()->isAdmin(), 403);
+
+        $validated = $request->validate(['search' => ['nullable', 'string', 'max:255']]);
+        $search = trim($validated['search'] ?? '');
+        $today = now()->startOfDay();
+
+        $requests = InternetAccessRequest::with('user')
+            ->where('created_at', '>=', $today)
+            ->where('created_at', '<', $today->copy()->addDay())
+            ->when($search !== '', function ($query) use ($search): void {
+                $query->where(function ($query) use ($search): void {
+                    $query->where('requester_ip', 'like', '%'.$search.'%')
+                        ->orWhere('purpose', 'like', '%'.$search.'%')
+                        ->orWhereHas('user', function ($query) use ($search): void {
+                            $query->where('full_name', 'like', '%'.$search.'%')
+                                ->orWhere('username', 'like', '%'.$search.'%');
+                        });
+                });
+            })
+            ->latest()->orderByDesc('id')->paginate(20)->appends(['search' => $search]);
+
+        return view('internet-access.admin', compact('requests', 'search', 'today'));
+    }
+
+    public function destroy(Request $request, InternetAccessRequest $internetAccessRequest, RouterOsClient $mikrotik): RedirectResponse
+    {
+        abort_unless($request->user()->isAdmin(), 403);
+
+        try {
+            DB::transaction(function () use ($internetAccessRequest, $mikrotik): void {
+                $record = InternetAccessRequest::query()->lockForUpdate()->findOrFail($internetAccessRequest->id);
+
+                // Expired requests have already had their router credentials removed.
+                if ($record->status !== InternetAccessRequest::STATUS_EXPIRED) {
+                    $mikrotik->removeAccess($record->username);
+                }
+
+                $record->delete();
+            });
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return redirect()->route('internet-access.admin.index')
+                ->with('error', 'The request could not be deleted. Please try again.');
+        }
+
+        return redirect()->route('internet-access.admin.index')->with('success', 'Internet access request deleted.');
+    }
+
     public function index(Request $request): View
     {
         $activeRequest = InternetAccessRequest::where('user_id', $request->user()->id)

@@ -26,6 +26,12 @@
                 <div class="menu-title">Administrative Tool</div>
             </a>
         </li>
+        <li>
+            <a href="{{ route('internet-access.admin.index') }}">
+                <div class="parent-icon"><i class='bx bx-globe'></i></div>
+                <div class="menu-title">Internet Request Records</div>
+            </a>
+        </li>
         @endif
         <li>
             <a href="{{ route('reports.index') }}">

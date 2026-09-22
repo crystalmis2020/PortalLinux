@@ -393,3 +393,19 @@ the countdown continues during disconnection. No new request is needed.
 The connector checks MikroTik again to confirm reconnection. Reconnect tokens
 cannot be issued or exchanged once the access time has elapsed, even before
 the scheduler finishes cleanup.
+
+### Admin PPPoE IP address
+
+The admin request table shows the original Request IP and the last recorded
+PPPoE IP separately. The PPPoE IP is captured from the MikroTik active session
+during connector verification (including reconnects) or scheduler activation.
+It remains blank until captured and is retained after expiration. Existing active
+records receive an address on their next successful connector verification.
+Admin search includes both IP fields. This is a recorded address, not a live
+online-status indicator. Reconnecting does not reset the expiration time.
+
+Deploy the new database column before using the updated application:
+
+```bash
+php artisan migrate --path=database/migrations/2026_09_22_000001_add_pppoe_ip_to_internet_access_requests_table.php
+```

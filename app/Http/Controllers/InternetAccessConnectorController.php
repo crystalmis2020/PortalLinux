@@ -127,7 +127,7 @@ class InternetAccessConnectorController extends Controller
         $internetRequest = $connectorToken->internetAccessRequest;
 
         try {
-            $connected = $mikrotik->isUserConnected($internetRequest->username);
+            $activeSession = $mikrotik->getActiveSession($internetRequest->username);
         } catch (\Throwable $exception) {
             report($exception);
 
@@ -144,7 +144,7 @@ class InternetAccessConnectorController extends Controller
             ], 409)->withHeaders($this->noStoreHeaders());
         }
 
-        if (! $connected) {
+        if ($activeSession === null) {
             return response()->json([
                 'connected' => false,
                 'status' => $internetRequest->status,
@@ -152,7 +152,10 @@ class InternetAccessConnectorController extends Controller
         }
 
         if ($internetRequest->status === InternetAccessRequest::STATUS_ACTIVE) {
-            $internetRequest->update(['last_seen_online_at' => now()]);
+            $internetRequest->update([
+                'last_seen_online_at' => now(),
+                'pppoe_ip' => $activeSession['address'] ?? $internetRequest->pppoe_ip,
+            ]);
 
             return response()->json([
                 'connected' => true,
@@ -170,6 +173,7 @@ class InternetAccessConnectorController extends Controller
                 'connected_at' => $connectedAt,
                 'expires_at' => $connectedAt->copy()->addMinutes($internetRequest->duration_minutes),
                 'last_seen_online_at' => $connectedAt,
+                'pppoe_ip' => $activeSession['address'] ?? $internetRequest->pppoe_ip,
                 'failure_reason' => null,
             ]);
 

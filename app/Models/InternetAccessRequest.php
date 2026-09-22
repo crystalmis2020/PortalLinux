@@ -24,6 +24,7 @@ class InternetAccessRequest extends Model
     protected $fillable = [
         'user_id',
         'requester_ip',
+        'pppoe_ip',
         'purpose',
         'requested_hours',
         'duration_minutes',

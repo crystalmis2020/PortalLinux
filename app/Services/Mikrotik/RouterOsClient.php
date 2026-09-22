@@ -40,11 +40,16 @@ class RouterOsClient
 
     public function isUserConnected(string $username): bool
     {
+        return $this->getActiveSession($username) !== null;
+    }
+
+    public function getActiveSession(string $username): ?array
+    {
         return $this->withConnection(function () use ($username) {
             $active = $this->comm('/ppp/active/print', ['?name' => $username]);
             $this->throwIfTrap($active);
 
-            return count($active) > 0;
+            return $active[0] ?? null;
         });
     }
 

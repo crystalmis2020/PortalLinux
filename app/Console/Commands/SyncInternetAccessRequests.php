@@ -48,7 +48,9 @@ class SyncInternetAccessRequests extends Command
             ->chunkById(50, function ($requests) use ($mikrotik) {
                 foreach ($requests as $request) {
                     try {
-                        if (! $mikrotik->isUserConnected($request->username)) {
+                        $activeSession = $mikrotik->getActiveSession($request->username);
+
+                        if ($activeSession === null) {
                             continue;
                         }
 
@@ -62,6 +64,7 @@ class SyncInternetAccessRequests extends Command
                                 'connected_at' => $connectedAt,
                                 'expires_at' => $connectedAt->copy()->addMinutes($request->duration_minutes),
                                 'last_seen_online_at' => $connectedAt,
+                                'pppoe_ip' => $activeSession['address'] ?? $request->pppoe_ip,
                                 'failure_reason' => null,
                             ]);
 

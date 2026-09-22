@@ -22,7 +22,7 @@
             <label for="requestSearch" class="form-label">Search today's requests</label>
             <div class="d-flex flex-wrap gap-2">
                 <input type="search" id="requestSearch" name="search" value="{{ $search }}"
-                       class="form-control flex-grow-1 w-auto" placeholder="Name, IP, or purpose" maxlength="255">
+                       class="form-control flex-grow-1 w-auto" placeholder="Name, request IP, PPPoE IP, or purpose" maxlength="255">
                 <button type="submit" class="btn btn-primary">Search</button>
                 @if($search !== '')
                     <a href="{{ route('internet-access.admin.index') }}" class="btn btn-outline-secondary">Clear</a>
@@ -35,13 +35,14 @@
         <div class="table-responsive">
             <table class="table table-bordered align-middle mb-0">
                 <thead>
-                    <tr><th>Name</th><th>IP</th><th>Purpose</th><th>Time</th><th>Action</th></tr>
+                    <tr><th>Name</th><th>Request IP</th><th title="Last IP recorded when MikroTik confirmed a connection">PPPoE IP</th><th>Purpose</th><th>Time</th><th>Action</th></tr>
                 </thead>
                 <tbody>
                     @forelse($requests as $item)
                         <tr>
                             <td>{{ $item->user?->full_name ?: $item->user?->username ?: 'Unknown user' }}</td>
                             <td class="text-nowrap">{{ $item->requester_ip ?: '—' }}</td>
+                            <td class="text-nowrap">{{ $item->pppoe_ip ?: '—' }}</td>
                             <td class="text-break" style="white-space: pre-wrap">{{ $item->purpose }}</td>
                             <td class="text-nowrap">
                                 <div>{{ $item->duration_minutes / 60 }} {{ \Illuminate\Support\Str::plural('hour', $item->duration_minutes / 60) }}</div>
@@ -57,7 +58,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="5" class="text-center text-muted py-4">{{ $search !== '' ? 'No matching requests today.' : 'No internet access requests today.' }}</td></tr>
+                        <tr><td colspan="6" class="text-center text-muted py-4">{{ $search !== '' ? 'No matching requests today.' : 'No internet access requests today.' }}</td></tr>
                     @endforelse
                 </tbody>
             </table>

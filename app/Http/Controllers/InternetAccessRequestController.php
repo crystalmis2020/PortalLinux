@@ -27,6 +27,7 @@ class InternetAccessRequestController extends Controller
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($query) use ($search): void {
                     $query->where('requester_ip', 'like', '%'.$search.'%')
+                        ->orWhere('pppoe_ip', 'like', '%'.$search.'%')
                         ->orWhere('purpose', 'like', '%'.$search.'%')
                         ->orWhereHas('user', function ($query) use ($search): void {
                             $query->where('full_name', 'like', '%'.$search.'%')

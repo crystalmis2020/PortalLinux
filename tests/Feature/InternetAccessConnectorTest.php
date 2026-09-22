@@ -201,10 +201,10 @@ class InternetAccessConnectorTest extends TestCase
             ->assertOk();
 
         $mikrotik = Mockery::mock(RouterOsClient::class);
-        $mikrotik->shouldReceive('isUserConnected')
+        $mikrotik->shouldReceive('getActiveSession')
             ->twice()
             ->with($internetRequest->username)
-            ->andReturn(true);
+            ->andReturn(['address' => '10.50.0.10'], ['address' => '10.50.0.11']);
         $this->app->instance(RouterOsClient::class, $mikrotik);
 
         $this->withToken($plainToken)
@@ -214,6 +214,7 @@ class InternetAccessConnectorTest extends TestCase
             ->assertJson(['connected' => true, 'status' => InternetAccessRequest::STATUS_ACTIVE]);
 
         $activatedRequest = $internetRequest->fresh();
+        $this->assertSame('10.50.0.10', $activatedRequest->pppoe_ip);
         $connectedAt = $activatedRequest->connected_at->copy();
         $expiresAt = $activatedRequest->expires_at->copy();
 
@@ -226,8 +227,30 @@ class InternetAccessConnectorTest extends TestCase
             ->assertJson(['connected' => true, 'status' => InternetAccessRequest::STATUS_ACTIVE]);
 
         $activatedRequest->refresh();
+        $this->assertSame('10.50.0.11', $activatedRequest->pppoe_ip);
         $this->assertTrue($connectedAt->equalTo($activatedRequest->connected_at));
         $this->assertTrue($expiresAt->equalTo($activatedRequest->expires_at));
+    }
+
+    public function test_scheduler_records_the_assigned_ip_and_retains_it_after_expiration(): void
+    {
+        $internetRequest = $this->internetRequest($this->user('requester'));
+        $mikrotik = Mockery::mock(RouterOsClient::class);
+        $mikrotik->shouldReceive('getActiveSession')->once()->with($internetRequest->username)
+            ->andReturn(['address' => '10.50.0.20']);
+        $mikrotik->shouldReceive('removeAccess')->once()->with($internetRequest->username);
+        $this->app->instance(RouterOsClient::class, $mikrotik);
+
+        $this->artisan('internet-access:sync')->assertSuccessful();
+        $internetRequest->refresh();
+        $this->assertSame(InternetAccessRequest::STATUS_ACTIVE, $internetRequest->status);
+        $this->assertSame('10.50.0.20', $internetRequest->pppoe_ip);
+
+        $this->travelTo($internetRequest->expires_at->copy()->addSecond());
+        $this->artisan('internet-access:sync')->assertSuccessful();
+        $internetRequest->refresh();
+        $this->assertSame(InternetAccessRequest::STATUS_EXPIRED, $internetRequest->status);
+        $this->assertSame('10.50.0.20', $internetRequest->pppoe_ip);
     }
 
     public function test_verification_cannot_reactivate_a_request_that_expired_during_router_lookup(): void
@@ -242,14 +265,14 @@ class InternetAccessConnectorTest extends TestCase
             ->assertOk();
 
         $mikrotik = Mockery::mock(RouterOsClient::class);
-        $mikrotik->shouldReceive('isUserConnected')
+        $mikrotik->shouldReceive('getActiveSession')
             ->once()
-            ->andReturnUsing(function () use ($internetRequest): bool {
+            ->andReturnUsing(function () use ($internetRequest): array {
                 InternetAccessRequest::query()
                     ->whereKey($internetRequest->id)
                     ->update(['status' => InternetAccessRequest::STATUS_EXPIRED]);
 
-                return true;
+                return ['address' => '10.50.0.10'];
             });
         $this->app->instance(RouterOsClient::class, $mikrotik);
 
@@ -328,7 +351,7 @@ class InternetAccessConnectorTest extends TestCase
             ->assertOk()->assertJson(['username' => $internetRequest->username]);
 
         $mikrotik = Mockery::mock(RouterOsClient::class);
-        $mikrotik->shouldReceive('isUserConnected')->twice()->andReturn(false, true);
+        $mikrotik->shouldReceive('getActiveSession')->twice()->andReturn(null, ['address' => '10.50.0.12']);
         $this->app->instance(RouterOsClient::class, $mikrotik);
 
         $this->withToken($token)
@@ -339,6 +362,7 @@ class InternetAccessConnectorTest extends TestCase
             ->assertOk()->assertJson(['connected' => true, 'status' => 'active']);
 
         $internetRequest->refresh();
+        $this->assertSame('10.50.0.12', $internetRequest->pppoe_ip);
         $this->assertTrue($originalExpiry->equalTo($internetRequest->expires_at));
         $this->assertTrue($originalConnection->equalTo($internetRequest->connected_at));
     }
@@ -505,8 +529,10 @@ class InternetAccessConnectorTest extends TestCase
         $today = $this->internetRequest($owner);
         $old = $this->internetRequest($owner);
         $old->forceFill(['created_at' => now()->subDay()])->save();
+        $today->update(['pppoe_ip' => '10.50.0.15']);
+        $old->update(['pppoe_ip' => '10.50.0.15']);
 
-        foreach (['Requester User', 'requester', '192.0.2.10', 'Feature test', 'no-match'] as $search) {
+        foreach (['Requester User', 'requester', '192.0.2.10', '10.50.0.15', 'Feature test', 'no-match'] as $search) {
             $request = \Illuminate\Http\Request::create('/internet-access/admin', 'GET', ['search' => $search]);
             $request->setUserResolver(fn () => $admin);
             $records = app(InternetAccessRequestController::class)->adminIndex($request)->getData()['requests'];
@@ -590,6 +616,7 @@ class InternetAccessConnectorTest extends TestCase
             $table->id();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->string('requester_ip', 45)->nullable();
+            $table->ipAddress('pppoe_ip')->nullable();
             $table->text('purpose');
             $table->string('requested_hours');
             $table->unsignedSmallInteger('duration_minutes');
